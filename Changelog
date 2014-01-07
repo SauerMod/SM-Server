@@ -1,0 +1,48 @@
+Changelog
+=========
+0.1.0:
+
+	* Added a player command system (/servcmd and #).
+	* Added a variable to force players spectating if they are using a modified map.
+	* Added a debug system.
+	* Added a man system.
+	* Added a signal catch system:
+	  -> SIGINT, SIGTERM, SIGKILL -> disconnect all clients and close server
+	  -> SIGSESV                  -> prints debug messages about the segment violation.
+	  -> SIGUSR1                  -> reloads the server-init.cfg
+	* Added several player commands:
+	  -> #help
+	  -> #info
+	  -> #pm
+	  -> #stats
+	  -> #mute
+	  -> #emute
+	  -> #nmute
+	  -> #smute
+	  -> #sendto
+	  -> #givemaster
+	  -> #ban
+	  -> #unban
+	  -> #listbans
+	  -> #snmute
+	  -> #getip
+	  -> #fspec
+	  -> #funspec
+	  -> #pban
+	  -> #unpban
+	  -> #listpbans
+	  -> #giveadmin
+	  -> #revokepriv
+	  -> #halt
+	  -> #exec
+	* Added a basic anticheat system:
+	  -> N_EDITMODE
+	  -> N_EDITF, N_EDITT, N_EDITM, N_FLIP, N_ROTATE, N_REPLACE, N_DELCUBE
+	  -> N_EDITENT
+	* Added a player muting system:
+	  -> mute   -> text messages mute
+	  -> emute  -> edit messages mute
+	  -> nmute  -> name switching mute
+	  -> smute  -> spectators text messages mute
+	  -> snmute -> spectators name switching mute
+	* Added a spectators only team chat.

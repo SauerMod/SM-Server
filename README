@@ -1,0 +1,63 @@
+  _____                               __    __             _          _____ 
+ / ____|                             |  \__/  |           | |        / ____|
+/ /                           _      |        |           | |       / /              _                     _
+\ \____  _____  _    _  ____ | |____ | |\  /| | ___   ___ | |  ____ \ \____    ____ | |____ _     _ _____ | |____
+ \____ \/ __  \| |  | |/ __ \| | __ \| | \/ | |/ _ \ / _ \| | |____| \____ \  / __ \| | __ \ \   / /  __ \| | __ \
+      \ \/__|  | |  | | |___/| |/  |_| |    | | / \ | / \   |             \ \| |___/| |/  |_\ \_/ /| |___/| |/  |_|
+  ____/ // _|  | |__| | |____| |     | |    | | \_/ | \_/   |         ____/ /| |____| |      \   / | |____| |
+ |_____/ \____/\______/\____/|_|     |_|    |_|\___/ \___/|_|        |_____/  \____/|_|       \_/  \_____/|_|     
+
+
+SauerMod-Server (A.K.A. SM-Server) - Cube 2: Sauerbraten Server Modiciation.
+
+Current features:
+	+ Force spec on modified map
+	+ Man system
+	+ Signals catch system
+	  -> SIGINT, SIGTERM, SIGKILL   -> disconnect all clients and close server.
+	  -> SIGSEGV                    -> prints some debug information, disconnects all clients and quits.
+	  -> SIGUSR1                    -> reloads the server-init.cfg and pban.cfg.
+	+ Commands system
+	  -> #emute, #sendto            -> Editmute, sendto, a must for coop editing.
+	  -> #pban, #unpban, #listpbans -> Permament bans system.
+	  -> #ban, #unban, #listbans    -> Bans system (#listbans shows /kicks too, #unban unbans /kicks too).
+	  -> #mute, #nmute              -> Chat mute, name change mute.
+	  -> #getip                     -> Returns a player's IP-address.
+	  -> #smute, #snmute            -> Spectators-chat mute, spectators-name-change mute.
+	  -> #stats                     -> This really is a must for Sauerbraten.
+	  -> #giveadmin, #revokepriv    -> Gives admin privileges to a client or revokes a client's privileges.
+	  -> #fspec, #funspec           -> Forces a player to spectate or to unspectate.
+	  -> #exec                      -> Runs a cubescript code.
+	  -> And much more!
+	+ Basic anticheat
+	  -> Editing in non coop checks.
+	+ Spectators only team-chat
+
+Top priorities:
+	+ Display flagruns.
+	+ GeoIP support.
+
+Task list:
+	+ Spy system.
+	+ Improve anticheat:
+	  -> Guns hack checks.
+	  -> Sound hack checks.
+	  -> Items in m_noitem checks.
+	  -> Ammo in m_noammo checks.
+	  -> Message size checks.
+	  -> Flag hack checks.
+	  -> Speed hack checks.
+	+ Add player commands.
+
+Additional tasks:
+	+ IRC bot.
+	+ Improve scripting system.
+	+ Improve the debugging system (add more useful information about the error ._.).
+
+Getting help: 
+	Check our wiki for help! https://github.com/SauerMod/SM-Server/wiki
+	Installation: https://github.com/SauerMod/SM-Server/wiki/setup
+	Configuration: https://github.com/SauerMod/SM-Server/wiki/configure
+	Commands man db: https://github.com/SauerMod/SM-Server/wiki/man-db
+
+Please report any bugs at https://github.com/SauerMod/SM-Server/issues/new.
