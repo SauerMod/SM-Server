@@ -1,5 +1,22 @@
 Changelog
 =========
+0.1.1:
+	* Added a modules system
+	  -> geolocation module
+	* Updated Makefile:
+	  -> Added cleanenet option.
+	  -> Edited install option.
+	* Added player commands:
+	  -> #persist
+	  -> #persistb
+	  -> #load
+	  -> #unload
+	  -> #reload
+	* Added persisting system:
+	  -> Teams persisting
+	  -> Bots persisting
+	* Fixed some small problems
+
 0.1.0:
 
 	* Added a player command system (/servcmd and #).

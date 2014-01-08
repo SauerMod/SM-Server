@@ -32,10 +32,11 @@ Current features:
 	+ Basic anticheat
 	  -> Editing in non coop checks.
 	+ Spectators only team-chat
+	+ Modules system
+	  -> Geolocation module         -> A un-/re-/loadable module to show client's geolocation on connect.
 
 Task list:
 	+ Display flagruns.
-	+ GeoIP support.
 	+ Spy system.
 	+ Improve anticheat:
 	  -> Guns hack checks.
@@ -45,7 +46,6 @@ Task list:
 	  -> Message size checks.
 	  -> Flag hack checks.
 	  -> Speed hack checks.
-	+ Add player commands.
 
 Additional tasks:
 	+ IRC bot.
@@ -59,3 +59,6 @@ Getting help:
 	Commands man db: https://github.com/SauerMod/SM-Server/wiki/man-db
 
 Please report any bugs at https://github.com/SauerMod/SM-Server/issues/new.
+
+Notes:
+The Geolocation module uses GeoLite data, see src/modules/geolocation/README for more.

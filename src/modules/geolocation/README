@@ -1,0 +1,8 @@
+SM-Server geolocation module
+============================
+You can compile this module by running this command in the main SM-Server folder
+make -C "src/" modules/geolocation
+
+Note:
+This product includes GeoLite data created by MaxMind, available from
+http://www.maxmind.com.

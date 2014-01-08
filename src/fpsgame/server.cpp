@@ -1959,6 +1959,9 @@ namespace server
         }
         notgotitems = false;
     }
+
+    bool persistteams = false;
+    bool persistbots = false;
         
     void changemap(const char *s, int mode)
     {
@@ -1966,7 +1969,7 @@ namespace server
         pausegame(false);
         changegamespeed(100);
         if(smode) smode->cleanup();
-        aiman::clearai();
+        if(!persistbots) aiman::clearai();
 
         gamemode = mode;
         gamemillis = 0;
@@ -1989,7 +1992,7 @@ namespace server
         sendf(-1, 1, "risii", N_MAPCHANGE, smapname, gamemode, 1);
 
         clearteaminfo();
-        if(m_teammode) autoteam();
+        if(m_teammode && !persistteams) autoteam();
 
         if(m_capture) smode = &capturemode;
         else if(m_ctf) smode = &ctfmode;
@@ -2783,6 +2786,124 @@ namespace server
         }
     }
 
+#ifndef WIN32
+# include <dlfcn.h>
+    struct gfunc
+    {
+        char n[64];
+        void *f;
+    };
+    vector<gfunc *> gfuncs;
+
+    void *getexternal(char *s)
+    {
+        loopv(gfuncs)
+            if(!strcmp(gfuncs[i]->n, s) && gfuncs[i]->f) return gfuncs[i]->f;
+        return 0;
+    }
+
+    void addexternal(char *s, void *v)
+    {
+        gfunc *p = new gfunc;
+        if(!p) return;
+        gfuncs.add(p);
+        strncpy(p->n, s, 64);
+        p->f = v;
+    }
+
+    void setexternal(char *s, void *v)
+    {
+        gfunc* cur = 0;
+        loopv(gfuncs) if(!strcmp(gfuncs[i]->n, s)) cur = gfuncs[i];
+        if(cur) cur->f = v;
+        else addexternal(s, v);
+    }
+
+    struct module
+    {
+        string name;
+        void *(*function)(char*args[16]);
+        void *h;
+    };
+    vector<module> modules;
+
+    int is_mod_loaded(const char *_name)
+    {
+        loopv(modules)
+            if(!strcmp(modules[i].name, _name)) return i;
+        return -1;
+    }
+
+    int _load(const char *_name, char args[16])
+    {
+        defformatstring(__name)("modules/mod_%s.so", _name);
+        if(is_mod_loaded(_name) >= 0) return 1; // Module already loaded.
+        module &mod = modules.add();
+        copystring(mod.name, _name);
+        mod.h = dlopen(__name, RTLD_NOW);
+        if(!mod.h)
+        {
+            int i = is_mod_loaded(_name);
+            modules.remove(i);
+            return 2; // Module loading failed.
+        }
+        void *(*mod_main)(void*, void*, char*);
+        typedef void *(* maintype)(void*, void*, char*);
+        mod_main = (maintype)dlsym(mod.h, "mod_init");
+        if(!mod_main)
+        {
+            dlclose(mod.h);
+            int i = is_mod_loaded(_name);
+            modules.remove(i);
+            return 3; // Could not find mod_init.
+        }
+        mod_main((void*)getexternal, (void*)setexternal, args);
+        void *(*mod_function)(char**);
+        typedef void *(* functype)(char **);
+        mod_function = (functype)dlsym(mod.h, "mod_func");
+        if(!mod_function)
+        {
+            dlclose(mod.h);
+            int i = is_mod_loaded(_name);
+            modules.remove(i);
+            return 4; // Could not find mod_func.
+        }
+        mod.function = mod_function;
+        return 0;
+    }
+
+    int _unload(const char *_name)
+    {
+        int i = is_mod_loaded(_name);
+        if(i < 0) return 1; // Module not loaded.
+        void *(*mod_uninit)();
+        typedef void *(* closetype)();
+        mod_uninit = (closetype)dlsym(modules[i].h, "mod_close");
+        if(!mod_uninit)
+        {
+            dlclose(modules[i].h);
+            modules.remove(i);
+            return 2; // Could not find mod_close.
+        }
+        mod_uninit();
+        dlclose(modules[i].h);
+        modules.remove(i);
+        return 0;
+    }
+
+    int _reload(const char *_name, char args[16])
+    {
+        int i = _unload(_name);
+        int j = _load(_name, args);
+        return (i == 0 && j == 0) ? 0 : 1;
+    }
+
+    /*ICOMMAND(loadmod, "s", (const char * _s), {
+        char chrs[16] = {};
+        _load(_s, chrs);
+    })*/
+#endif
+
     void connected(clientinfo *ci)
     {
         if(m_demo) enddemoplayback();
@@ -2812,6 +2933,22 @@ namespace server
         if(m_demo) setupdemoplayback();
 
         if(servermotd[0]) sendf(ci->clientnum, 1, "ris", N_SERVMSG, servermotd);
+
+        ci->forcespec = false;
+        ci->mute = false;
+        ci->emute = false;
+        ci->nmute = false;
+
+#ifndef WIN32
+        int i = is_mod_loaded("geolocation");
+        if(i >= 0)
+        {
+            char *z[16];
+            z[0] = (char*)colorname(ci);
+            z[1] = (char*)getclienthostname(ci->clientnum);
+            modules[i].function(z);
+        }
+#endif
     }
 
     VARP(Debug, 0, 1, 1); // enables debug features.
@@ -2858,8 +2995,7 @@ namespace server
         //  i[4] = additional information about the error
         //  i[5] = backtrace
         // _a    = given arguments
-        if(!Debug) return;
-        if(DebugErrorOnly && !e) return;
+        if(!Debug || (DebugErrorOnly && !e)) return;
         switch (t)
         {
             case 0:
@@ -2926,7 +3062,8 @@ namespace server
                     if(e)
                     {
                         logoutf("End of bug report. Please report this bug at");
-                        logoutf("https://github.com/SauerMod/SM-Server/issues/new\nwith some additional information.");
+                        logoutf("https://github.com/SauerMod/SM-Server/issues/new");
+                        logoutf("with some additional information.");
                     }
                     logoutf("=================================");
                 }
@@ -2968,7 +3105,7 @@ namespace server
         }
     }
     void debugf(bool s, bool e, int t, const char * n, const char * _e, const char * a, char * i [6], const char * _a, ...) { defvformatstring(__a, _a, _a); debug(s, e, t, n, _e, a, i, __a); }
-    void sendmsg(int cn, const char * msg) { sendf(cn, 1, "ris", N_SERVMSG, msg); char * i[6] = {}; i[0] = (char*)"2971"; i[1] = (char*)"fpsgame/server.cpp"; i[2] = (char*)"2"; i[3] = (char*)"2"; i[4] = (char*)""; i[5] = (char*)""; debugf(true, false, 1, "server::sendmsg", "", "int, const char *", i, "%i, \"%s\"", cn, msg); }
+    void sendmsg(int cn, const char * msg) { sendf(cn, 1, "ris", N_SERVMSG, msg); }
     void sendmsgf(int cn, const char * msg, ...) { defvformatstring(s, msg, msg); sendmsg(cn, s); }
     void sendmsg(clientinfo * ci, const char * msg) { sendmsg(ci?ci->ownernum:-1, msg); }
     void sendmsgf(clientinfo * ci, const char * msg, ...) { defvformatstring(s, msg, msg); sendmsg(ci?ci->ownernum:-1, s); }
@@ -3048,15 +3185,6 @@ namespace server
             return 3;
         }
         current->func((const char*)input[1], ci);
-        char * i[6] = { };
-        i[0] = (char*)"3022";
-        i[1] = (char*)"fpsgame/server.cpp";
-        i[2] = (char*)"2";
-        i[3] = (char*)"2";
-        defformatstring(_s)("Recived SERVCMD\nMap: %s\nGamemode: %s\nClients: %i", smapname, gamemodes[gamemode+3].name, nonlocalclients);
-        i[4] = _s;
-        i[5] = (char*)"";
-        debugf(false, false, 1, "server::parsecommand", "", "const char *, clientinfo *", i, "\"%s\", %s", text, colorname(ci));
         return 0;
     }
 
@@ -3464,6 +3592,30 @@ namespace server
         }
     })
 
+    servcmd(persist, {
+        char*array[2];
+        explodeString(args, array, ' ', 2);
+        if(array[0])
+        {
+            int i = atoi(array[0]);
+            persistteams = (i != 0) ? true : false;
+        }
+        else persistteams = revbool(persistteams);
+        sendservmsgf("Team persisting has been %sabled.", persistteams ? "en" : "dis");
+    })
+
+    servcmd(persistb, {
+        char*array[2];
+        explodeString(args, array, ' ', 2);
+        if(array[0])
+        {
+            int i = atoi(array[0]);
+            persistbots = (i != 0) ? true : false;
+        }
+        else persistbots = revbool(persistbots);
+        sendservmsgf("Bots persisting has been %sabled.", persistbots ? "en" : "dis");
+    })
+
     servcmd(ban, {
         char *array[3];
         explodeString(args, array, ' ', 3);
@@ -3661,6 +3813,70 @@ namespace server
         }
     })
 
+#ifndef WIN32
+    servcmd(load, {
+        char*array[2];
+        explodeString(args, array, ' ', 2);
+        if(!array[0]) { sendmsg(ci, "usage: #load <module>"); return; }
+        char chrs[16] = {};
+        switch(_load(array[0], chrs))
+        {
+            case 1:
+                sendmsg(ci, "This module already has been loaded.");
+                return;
+            case 2:
+                sendmsgf(ci, "Module loading failed (%s).", dlerror());
+                return;
+            case 3:
+                sendmsg(ci, "Could not find mod_init.");
+                return;
+            case 4:
+                sendmsg(ci, "Could not find mod_func.");
+                return;
+            default:
+                sendmsg(ci, "Module succsessfully loaded.");
+                break;
+        }
+        sendservmsgf("%s has loaded the %s module.", colorname(ci), array[0]);
+    })
+
+    servcmd(unload, {
+        char*array[2];
+        explodeString(args, array, ' ', 2);
+        if(!array[0]) { sendmsg(ci, "usage: #unload <module>"); return; }
+        switch(_unload(array[0]))
+        {
+            case 1:
+                sendmsg(ci, "This module hasn't been initialized yet.");
+                return;
+            case 2:
+                sendmsg(ci, "Could not find mod_close.");
+                return;
+            default:
+                sendmsg(ci, "Module succsessfully unloaded.");
+                break;
+        }
+        sendservmsgf("%s has unloaded the %s module.", colorname(ci), array[0]);
+    })
+
+    servcmd(reload, {
+        char*array[2];
+        explodeString(args, array, ' ', 2);
+        if(!array[0]) { sendmsg(ci, "usage: #reload <module>"); return; }
+        char chrs[16] = {};
+        switch(_reload(array[0], chrs))
+        {
+            case 1:
+                sendmsgf(ci, "An error occured while reloading the module %s.", array[0]);
+                return;
+            default:
+                sendmsg(ci, "Module succsessfully reloaded.");
+                break;
+        }
+        sendservmsgf("%s has reloaded the %s module.", colorname(ci), array[0]);
+    })
+#endif
+
     ICOMMAND(pban, "ss", (const char *ip, const char *reason), {
         addpban(ip, reason);
     });
@@ -3677,7 +3893,7 @@ namespace server
         }
     }
 
-    void initcmds()
+    void initcmds() // Also initializes "global" functions, that means the functions that are shared with modules.
     {
         // Player commands that require no privileges
         addcmd("help", PRIV_NONE, servcmdname(help));
@@ -3701,6 +3917,10 @@ namespace server
         addman("sendto", "<cn[,cn2[,...]]>", "forces a client to getmap.");
         addcmd("givemaster", PRIV_MASTER, servcmdname(givemaster));
         addman("givemaster", "<cn[,cn2[,...]]>", "gives master privileges to a client.");
+        addcmd("persist", PRIV_MASTER, servcmdname(persist));
+        addman("persist", "[0/1]", "Enables teams persisting.");
+        addcmd("persistb", PRIV_MASTER, servcmdname(persistb));
+        addman("persistb", "[0/1]", "Enables bots persisting.");
         // Player commands that require auth privileges
         addcmd("ban", PRIV_AUTH, servcmdname(ban));
         addman("ban", "<cn> <time in minutes> [reason]", "kicks and bans a client with the specified ban duration.");
@@ -3732,6 +3952,16 @@ namespace server
         addman("halt", "", "Closes the server.");
         addcmd("exec", PRIV_OWNER, servcmdname(exec));
         addman("exec", "<Cubescript code>", "Runs a cubescript code.");
+#ifndef WIN32
+        addcmd("load", PRIV_OWNER, servcmdname(load));
+        addman("load", "<module>", "loads a module.");
+        addcmd("unload", PRIV_OWNER, servcmdname(unload));
+        addman("unload", "<module>", "unloads a module.");
+        addcmd("reload", PRIV_OWNER, servcmdname(reload));
+        addman("reload", "<module>", "reloads a module.");
+        // Functions, which are shared with modules
+        addexternal((char*)"sendservmsgf", (void*)sendservmsgf);
+#endif
     }
 
     void parsepacket(int sender, int chan, packetbuf &p)     // has to parse exactly each byte of the packet
@@ -3771,7 +4001,7 @@ namespace server
                     else
                     {
                         if(!ispban(getclienthostname(ci->clientnum))) connected(ci);
-                        else disconnect_client(sender, DISC_IPBAN);
+                        else { disconnect_client(sender, DISC_IPBAN); return; }
                     }
                     break;
                 }

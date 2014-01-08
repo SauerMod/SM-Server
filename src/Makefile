@@ -55,7 +55,7 @@ SERVER_LIBS= -mwindows $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lzlib1 -lenet -lws2_
 MASTER_LIBS= $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lzlib1 -lenet -lws2_32 -lwinmm
 else
 SERVER_INCLUDES= -DSTANDALONE $(INCLUDES)
-SERVER_LIBS= -Lenet -lenet -lz
+SERVER_LIBS= -Lenet -lenet -lz -ldl
 MASTER_LIBS= $(SERVER_LIBS)
 endif
 SERVER_OBJS= \
@@ -107,23 +107,34 @@ master: $(MASTER_OBJS)
 install: all
 else
 server:	libenet $(SERVER_OBJS)
-	$(CXX) $(CXXFLAGS) -o sauer_server $(SERVER_OBJS) $(SERVER_LIBS)  
+	$(CXX) $(CXXFLAGS) -o sauer_server $(SERVER_OBJS) $(SERVER_LIBS) -rdynamic
 	
 master: libenet $(MASTER_OBJS)
 	$(CXX) $(CXXFLAGS) -o sauer_master $(MASTER_OBJS) $(MASTER_LIBS)  
 
 install: all
-	cp sauer_server	../bin_unix/$(PLATFORM_PREFIX)_server
-	cp sauer_master	../bin_unix/$(PLATFORM_PREFIX)_master
+	cp sauer_server	../sauer_server
+	cp sauer_master	../sauer_master
 ifneq (,$(STRIP))
-	$(STRIP) ../bin_unix/$(PLATFORM_PREFIX)_server
-	$(STRIP) ../bin_unix/$(PLATFORM_PREFIX)_master
+	$(STRIP) ../sauer_server
+	$(STRIP) ../sauer_master
 endif
 endif
 
 enet/libenet.a:
 	$(MAKE) -C enet
 libenet: enet/libenet.a
+
+enet/clean:
+	$(MAKE) -C enet
+cleanenet: enet/clean
+
+_modules/geolocation:
+	$(CC) -g -O2 -Wall -fPIC -c modules/geolocation/main.c -o modules/geolocation/main.o
+	@mkdir -p ../modules/
+	$(CC) -g -O2 -shared modules/geolocation/main.o -lGeoIP -o ../modules/mod_geolocation.so
+
+modules/geolocation: _modules/geolocation
 
 depend:
 	makedepend -a -o-standalone.o -Y -DSTANDALONE -Ishared -Iengine -Ifpsgame $(subst -standalone.o,.cpp,$(SERVER_OBJS))
