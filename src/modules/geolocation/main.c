@@ -49,7 +49,7 @@ void mod_func(char *args[16])
 
 void mod_init(void *getexternal, void *setexternal, char args[16])
 {
-	int i;
+	/*int i;
 	for(i = 0; i < 16; i++)
 	{
 		if(args[i])
@@ -68,7 +68,7 @@ void mod_init(void *getexternal, void *setexternal, char args[16])
 				}
 			}
 		}
-	}
+	}*/ // not needed for now.
 	_gidb_co_ = GeoIP_open(_gidb_co_f_, gicache ? GEOIP_MEMORY_CACHE : GEOIP_STANDARD);
 	_gidb_ci_ = GeoIP_open(_gidb_ci_f_, gicache ? GEOIP_INDEX_CACHE  : GEOIP_STANDARD);
 	get_external = (getexternaltype)getexternal;
