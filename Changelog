@@ -1,5 +1,8 @@
 Changelog
 =========
+0.1.2:
+	* Added hidden privileges.
+	* Small bugfix in forcespec
 0.1.1:
 	* Added a modules system
 	  -> geolocation module

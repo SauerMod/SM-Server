@@ -29,18 +29,18 @@ void mod_func(char *args[16])
 		if(_gire_ci_ && _gire_ci_->city && _gire_ci_->city[0])
 		{
 			city = _gire_ci_->city;
-			snprintf(message, sizeof(message), "Client \fs\f0%s\fr connected from \fs\f0%s\fr, \fs\f0%s\fr.",
+			snprintf(message, sizeof(message), "\f1Client \fs\f7%s\fr connected from \fs\f0%s\fr, \fs\f0%s\fr.",
 				clientname,
 				city,
 				country
 			);
 		}
-		else snprintf(message, sizeof(message), "Client \fs\f0%s\fr connected from \fs\f0%s\fr.",
+		else snprintf(message, sizeof(message), "\f1Client \fs\f7%s\fr connected from \fs\f0%s\fr.",
 			clientname,
 			country
 		);
 	}
-	else snprintf(message, sizeof(message), "Client \fs\f0%s\fr connected from \fs\f0%s\fr.",
+	else snprintf(message, sizeof(message), "\f1Client \fs\f7%s\fr connected from \fs\f0%s\fr.",
 		clientname,
 		country
 	);

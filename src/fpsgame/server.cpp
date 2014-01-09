@@ -1365,6 +1365,8 @@ namespace server
 
     extern void connected(clientinfo *ci);
 
+    VARP(hidepriv, 0, 0, 1);
+
     bool setmaster(clientinfo *ci, bool val, const char *pass = "", const char *authname = NULL, const char *authdesc = NULL, int authpriv = PRIV_MASTER, bool force = false, bool trial = false)
     {
         if(authname && !val) return false;
@@ -1416,16 +1418,31 @@ namespace server
         string msg;
         if(val && authname) 
         {
-            if(authdesc && authdesc[0]) formatstring(msg)("%s claimed %s as '\fs\f5%s\fr' [\fs\f0%s\fr]", colorname(ci), name, authname, authdesc);
-            else formatstring(msg)("%s claimed %s as '\fs\f5%s\fr'", colorname(ci), name, authname);
+            if(authdesc && authdesc[0]) formatstring(msg)("%s\fs\f1 claimed \fr%s\f1 as '\fs\f5%s\fr' [\fs\f0%s\fr]%s",
+                colorname(ci),
+                name,
+                authname,
+                authdesc,
+                ci->privilege >= PRIV_MASTER && (ci->privilege <= PRIV_AUTH || !hidepriv) ? " (\fs\f0hidden\fr)" : ""
+            );
+            else formatstring(msg)("%s\fs\f1 claimed \fr%s\f1 as '\fs\f5%s\fr'%s",
+                colorname(ci),
+                name,
+                authname,
+                ci->privilege >= PRIV_MASTER && (ci->privilege <= PRIV_AUTH || !hidepriv) ? " (\fs\f0hidden\fr)" : ""
+            );
         } 
-        else formatstring(msg)("%s %s %s", colorname(ci), val ? "claimed" : "relinquished", name);
+        else formatstring(msg)("%s \fs\f1%s \fr%s", colorname(ci), val ? "claimed" : "relinquished", name);
         packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
-        putint(p, N_SERVMSG);
-        sendstring(msg, p);
+        if(ci->privilege >= PRIV_MASTER && (ci->privilege <= PRIV_AUTH || !hidepriv))
+        {
+            putint(p, N_SERVMSG);
+            sendstring(msg, p);
+        }
+        else sendmsg(ci, msg);
         putint(p, N_CURRENTMASTER);
         putint(p, mastermode);
-        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER)
+        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && (clients[i]->privilege <= PRIV_AUTH || !hidepriv))
         {
             putint(p, clients[i]->clientnum);
             putint(p, clients[i]->privilege);
@@ -1827,7 +1844,7 @@ namespace server
             putint(p, mastermode);
             hasmaster = true;
         }
-        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER)
+        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && (clients[i]->privilege <= PRIV_AUTH || !hidepriv))
         {
             if(!hasmaster)
             {
@@ -3745,7 +3762,7 @@ namespace server
         {
             if(cx->privilege >= ci->privilege) { sendmsg(ci, "Permission denied."); return; }
             addpban(getclienthostname(cx->clientnum), Array[1]?:"Unknown");
-            sendservmsgf("%s has added %s(%s) to the list of permament banned clients for %s.", colorname(ci), colorname(cx), getclienthostname(cx->clientnum), Array[1] ? Array[1] : "an unknown reason");
+            sendservmsgf("%s has added %s (%s) to the list of permament banned clients for %s.", colorname(ci), colorname(cx), getclienthostname(cx->clientnum), Array[1] ? Array[1] : "an unknown reason");
             disconnect_client(cx->clientnum, DISC_IPBAN);
         }
     })
@@ -4523,7 +4540,7 @@ namespace server
             {
                 int spectator = getint(p), val = getint(p);
                 if(!ci->privilege && !ci->local && (spectator!=sender || (ci->state.state==CS_SPECTATOR && mastermode>=MM_LOCKED))) break;
-                if(ci->forcespec) break;
+                if(ci->forcespec && ci->state.state==CS_SPECTATOR) break;
                 clientinfo *spinfo = (clientinfo *)getclientinfo(spectator); // no bots
                 if(!spinfo || (spinfo->state.state==CS_SPECTATOR ? val : !val)) break;
 
