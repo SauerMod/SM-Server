@@ -1364,6 +1364,7 @@ namespace server
     }
 
     extern void connected(clientinfo *ci);
+    void sendmsg(clientinfo *, const char *);
 
     VARP(hidepriv, 0, 0, 1);
 
