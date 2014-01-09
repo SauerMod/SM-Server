@@ -1133,16 +1133,14 @@ void initserver(bool listen, bool dedicated)
         setupwindow("Cube 2: Sauerbraten server");
 #endif
     }
-    
+
+    server::serverinit();
     execfile("server-init.cfg", false);
     execfile("pban.cfg", false);
 
-    if(listen) setuplistenserver(dedicated);
-
-    server::serverinit();
-
-    if(listen)
+    if(listen) 
     {
+        setuplistenserver(dedicated);
         dedicatedserver = dedicated;
         updatemasterserver();
         if(dedicated) rundedicatedserver(); // never returns

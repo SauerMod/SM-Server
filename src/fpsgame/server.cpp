@@ -2909,10 +2909,10 @@ namespace server
         return (i == 0 && j == 0) ? 0 : 1;
     }
 
-    /*ICOMMAND(loadmod, "s", (const char * _s), {
+    ICOMMAND(loadmod, "s", (const char * _s), {
         char chrs[16] = {};
         _load(_s, chrs);
-    })*/
+    })
 #endif
 
     void connected(clientinfo *ci)
@@ -3848,7 +3848,7 @@ namespace server
                 sendmsg(ci, "Module succsessfully loaded.");
                 break;
         }
-        sendservmsgf("%s has loaded the %s module.", colorname(ci), array[0]);
+        sendservmsgf("%s\f1\fs has loaded the \f0%s\fr module.", colorname(ci), array[0]);
     })
 
     servcmd(unload, {
@@ -3867,7 +3867,7 @@ namespace server
                 sendmsg(ci, "Module succsessfully unloaded.");
                 break;
         }
-        sendservmsgf("%s has unloaded the %s module.", colorname(ci), array[0]);
+        sendservmsgf("%s\f1\fs has unloaded the \f0%s\fr module.", colorname(ci), array[0]);
     })
 
     servcmd(reload, {
@@ -3884,7 +3884,7 @@ namespace server
                 sendmsg(ci, "Module succsessfully reloaded.");
                 break;
         }
-        sendservmsgf("%s has reloaded the %s module.", colorname(ci), array[0]);
+        sendservmsgf("%s\f1\fs has reloaded the \f0%s\fr module.", colorname(ci), array[0]);
     })
 #endif
 

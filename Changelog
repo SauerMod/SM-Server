@@ -1,5 +1,8 @@
 Changelog
 =========
+0.1.6:
+	* Fixed loadmod command.
+	* Some small style changes in #load #unload and #reload messages.
 0.1.5:
 	* Last hidden privileges bugfix.
 0.1.4:
