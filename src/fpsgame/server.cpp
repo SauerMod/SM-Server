@@ -1424,16 +1424,21 @@ namespace server
                 name,
                 authname,
                 authdesc,
-                ci->privilege >= PRIV_MASTER && (ci->privilege <= PRIV_AUTH || !hidepriv) ? " (\fs\f0hidden\fr)" : ""
+                ci->privilege <= PRIV_AUTH || hidepriv ? " (\fs\f0hidden\fr)" : ""
             );
             else formatstring(msg)("%s\fs\f1 claimed \fr%s\f1 as '\fs\f5%s\fr'%s",
                 colorname(ci),
                 name,
                 authname,
-                ci->privilege >= PRIV_MASTER && (ci->privilege <= PRIV_AUTH || !hidepriv) ? " (\fs\f0hidden\fr)" : ""
+                ci->privilege <= PRIV_AUTH || hidepriv ? " (\fs\f0hidden\fr)" : ""
             );
         } 
-        else formatstring(msg)("%s \fs\f1%s \fr%s", colorname(ci), val ? "claimed" : "relinquished", name);
+        else formatstring(msg)("%s \fs\f1%s \fr%s%s",
+            colorname(ci),
+            val ? "claimed" : "relinquished",
+            name,
+            ci->privilege <= PRIV_AUTH || hidepriv ? " (\fs\f0hidden\fr)" : ""
+        );
         packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
         if(ci->privilege >= PRIV_MASTER && (ci->privilege <= PRIV_AUTH || !hidepriv))
         {
