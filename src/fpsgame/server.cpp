@@ -1419,33 +1419,21 @@ namespace server
         string msg;
         if(val && authname) 
         {
-            if(authdesc && authdesc[0]) formatstring(msg)("%s\fs\f1 claimed \fr%s\f1 as '\fs\f5%s\fr' [\fs\f0%s\fr]%s",
+            if(authdesc && authdesc[0]) formatstring(msg)("%s\fs\f1 claimed \fr%s\f1 as '\fs\f5%s\fr' [\fs\f0%s\fr]",
                 colorname(ci),
                 name,
                 authname,
-                authdesc,
-                ci->privilege <= PRIV_AUTH || hidepriv ? " (\fs\f0hidden\fr)" : ""
+                authdesc
             );
-            else formatstring(msg)("%s\fs\f1 claimed \fr%s\f1 as '\fs\f5%s\fr'%s",
+            else formatstring(msg)("%s\fs\f1 claimed \fr%s\f1 as '\fs\f5%s\fr'",
                 colorname(ci),
                 name,
-                authname,
-                ci->privilege <= PRIV_AUTH || hidepriv ? " (\fs\f0hidden\fr)" : ""
+                authname
             );
         } 
-        else formatstring(msg)("%s \fs\f1%s \fr%s%s",
-            colorname(ci),
-            val ? "claimed" : "relinquished",
-            name,
-            ci->privilege <= PRIV_AUTH || hidepriv ? " (\fs\f0hidden\fr)" : ""
-        );
+        else formatstring(msg)("%s \fs\f1%s \fr%s", colorname(ci), val ? "claimed" : "relinquished", name);
         packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
-        if(ci->privilege >= PRIV_MASTER && (ci->privilege <= PRIV_AUTH || !hidepriv))
-        {
-            putint(p, N_SERVMSG);
-            sendstring(msg, p);
-        }
-        else sendmsg(ci, msg);
+        sendmsg(ci, msg);
         putint(p, N_CURRENTMASTER);
         putint(p, mastermode);
         loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && (clients[i]->privilege <= PRIV_AUTH || !hidepriv))
