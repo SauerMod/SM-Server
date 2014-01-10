@@ -3219,6 +3219,20 @@ namespace server
         ci->mute = false;
         ci->emute = false;
         ci->nmute = false;
+
+        if(ci->isspy)
+        {
+            packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+            putint(p, N_INITCLIENT);
+            putint(p, ci->clientnum);
+            sendstring(ci->name, p);
+            sendstring(ci->team, p);
+            putint(p, ci->playermodel);
+            sendpacket(-1, 1, p.finalize());
+            aiman::addclient(ci);
+            sendf(-1, 1, "riii", N_SPECTATOR, ci->clientnum, 0);
+        }
+
         ci->isspy = false;
 
 #ifndef WIN32
@@ -4143,7 +4157,6 @@ namespace server
         }
         else
         {
-            // here bitch
             packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
             putint(p, N_INITCLIENT);
             putint(p, ci->clientnum);
