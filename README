@@ -29,23 +29,31 @@ Current features:
 	  -> #fspec, #funspec           -> Forces a player to spectate or to unspectate.
 	  -> #exec                      -> Runs a cubescript code.
 	  -> And much more!
-	+ Basic anticheat
+	+ Anticheat
 	  -> Editing in non coop checks.
+	  -> Gun hacks checks:
+	  	-> Generic gunhack
+	    -> Gun reload time
+	    -> Gun range
+	    -> Gun rays
+	    -> Non-insta weapons in instagib.
+	    -> Unknown gun.
+	  -> Message size checks.
+	  -> Flag hack checks.
 	+ Spectators only team-chat
+	+ Displays flagruns, stores best flagruns.
+	+ Spy system.
 	+ Modules system
 	  -> Geolocation module         -> A un-/re-/loadable module to show client's geolocation on connect.
 
 Task list:
-	+ Display flagruns.
-	+ Spy system.
+	+ Add multiple master servers system.
 	+ Improve anticheat:
-	  -> Guns hack checks.
 	  -> Sound hack checks.
 	  -> Items in m_noitem checks.
 	  -> Ammo in m_noammo checks.
-	  -> Message size checks.
-	  -> Flag hack checks.
 	  -> Speed hack checks.
+	  -> Unknown message checks.
 
 Additional tasks:
 	+ IRC bot.

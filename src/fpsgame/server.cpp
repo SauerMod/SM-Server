@@ -239,6 +239,8 @@ namespace server
         int authkickvictim;
         char *authkickreason;
         bool forcespec, mute, emute, nmute;
+        bool isspy;
+        int lasttakeflag;
 
         clientinfo() : getdemo(NULL), getmap(NULL), clipboard(NULL), authchallenge(NULL), authkickreason(NULL) { reset(); }
         ~clientinfo() { events.deletecontents(); cleanclipboard(); cleanauth(); }
@@ -795,6 +797,7 @@ namespace server
         loopv(clients) 
         {
             clientinfo *ci = clients[i];
+            if(ci->isspy) continue;
             if(ci->clientnum!=exclude && (!nospec || ci->state.state!=CS_SPECTATOR || (priv && (ci->privilege || ci->local))) && (!noai || ci->state.aitype == AI_NONE)) n++;
         }
         return n;
@@ -803,7 +806,7 @@ namespace server
     bool duplicatename(clientinfo *ci, char *name)
     {
         if(!name) name = ci->name;
-        loopv(clients) if(clients[i]!=ci && !strcmp(name, clients[i]->name)) return true;
+        loopv(clients) if(clients[i]!=ci && !clients[i]->isspy && !strcmp(name, clients[i]->name)) return true;
         return false;
     }
 
@@ -847,6 +850,221 @@ namespace server
         virtual void getteamscores(vector<teamscore> &scores) {}
         virtual bool extinfoteam(const char *team, ucharbuf &p) { return false; }
     };
+
+    // Generic notifics to clients
+
+    void sendmsg(int cn, const char * msg) { sendf(cn, 1, "ris", N_SERVMSG, msg); }
+    void sendmsgf(int cn, const char * msg, ...) { defvformatstring(s, msg, msg); sendmsg(cn, s); }
+    void sendmsg(clientinfo * ci, const char * msg) { sendmsg(ci ? ci->ownernum : -1, msg); }
+    void sendmsgf(clientinfo * ci, const char * msg, ...) { defvformatstring(s, msg, msg); sendmsg(ci ? ci->ownernum : -1, s); }
+
+    // Generic notifics to all clients who have at least a specified privilege level
+
+    void sendprivmsg(int priv, const char * msg) { loopv(clients) if(clients[i]->privilege >= priv) sendmsg(clients[i], msg); }
+    void sendprivmsgf(int priv, const char * msg, ...) { defvformatstring(s, msg, msg); sendprivmsg(priv, s); }
+    void sendprivmsg(clientinfo * ci, const char * msg) { sendprivmsg(ci ? ci->privilege : 0, msg); }
+    void sendprivmsgf(clientinfo * ci, const char * msg, ...) { defvformatstring(s, msg, msg); sendprivmsg(ci ? ci->privilege : 0, s); }
+
+    struct pban
+    {
+        string IP;
+        string Reason;
+    };
+    vector<pban> pbans;
+
+    void addpban(const char *ip, const char *reason)
+    {
+        loopv(pbans) if(!strcmp(pbans[i].IP, ip)) return;
+        pban &_pban = pbans.add();
+        copystring(_pban.IP, ip);
+        copystring(_pban.Reason, reason);
+    }
+
+    inline void addpbanf(const char *ip, const char *reason, ...)
+        { defvformatstring(s, reason, reason); addpban(ip, s); }
+
+    inline void addpban(char *ip, char *reason)
+        { addpban((const char *)ip, (const char *)reason); }
+
+    inline void addpbanf(char *ip, char *reason, ...)
+        { defvformatstring(s, reason, reason); addpban(ip, s); }
+
+    inline bool ispban(const char *ip)
+        { loopv(pbans) if(!strcmp(pbans[i].IP, ip)) return true; return false; }
+
+    inline bool ispban(char *ip)
+        { return ispban((const char *)ip); }
+
+    enum cheat_id_t
+    {
+        FLAGHACK = 0,
+        EDITMODE, EDITMSG, EDITENT,
+        GENERICGUNHACK, GUNHACKRELOAD, GUNHACKRANGE, GUNHACKRAYS, GUNHACKNOAMMO, GUNHACKNOTALIVE, NONINSTAGUNININSTA, UNKNOWNGUN,
+//        MNOITEMS, MNOAMMO,
+        MESSAGESIZE//, WRONGMESSAGE,
+//        SOUNDHACK
+    };
+
+    VAR(anticheat, 0, 1, 1);
+    VAR(ac_pban_clients, 0, 1, 1);
+    VAR(ac_public_message, 0, 0, 1);
+    VAR(flagrun_min_millis, 0, 500, 1000);
+
+    void ac(clientinfo * ci, cheat_id_t cheat_id, int eint = 0, const char *echar = "")
+    {
+        return;
+        if(!anticheat) return;
+        if(cheat_id < FLAGHACK || cheat_id > /*SOUNDHACK*/MESSAGESIZE) return;
+        string msg;
+        switch(cheat_id)
+        {
+            case FLAGHACK:
+            {
+                formatstring(msg)("Flaghack (taken millis = %i, minimal millis = %i).", eint, flagrun_min_millis);
+                break;
+            }
+            case EDITMODE:
+            case EDITMSG:
+            case EDITENT:
+            {
+                formatstring(msg)("Edit-packets in non coop-edit gamemode (%s).", 
+                    cheat_id == EDITMODE ? "edit-toggle" : (
+                        cheat_id == EDITMSG ? "generic edit-message" : "entity editing"
+                    )
+                );
+                break;
+            }
+            case GENERICGUNHACK:
+            {
+                copystring(msg, "Generic gun-hack");
+                break;
+            }
+            case GUNHACKRELOAD:
+            case GUNHACKRANGE:
+            case GUNHACKRAYS:
+            case NONINSTAGUNININSTA:
+            case UNKNOWNGUN:
+            {
+                formatstring(msg)("Gun-hack (%s (%i))",
+                    cheat_id == GUNHACKRELOAD ? "Modified weapon reload time" : (
+                        cheat_id == GUNHACKRANGE ? "Modified weapon range" : (
+                            cheat_id == GUNHACKRAYS ? "Modified weapon rays" : (
+                                cheat_id == NONINSTAGUNININSTA ? "Non instagib-gun in instagib-gamemode." : "Unknown gun."
+                            )
+                        )
+                    ),
+                    eint
+                );
+                break;
+            }
+            case GUNHACKNOAMMO: // Tollerate this.
+            case GUNHACKNOTALIVE:
+            {
+                return;
+            }
+/*            case MNOITEMS:
+            case MNOAMMO:
+            {
+                formatstring(msg)("Trying to pick up %s in a m_no%s gamemode.", 
+                    cheat_id == MNOITEMS ? "items" : "ammunition",
+                    cheat_id == MNOITEMS ? "items" : "ammo"
+                );
+                break;
+            }*/
+            case MESSAGESIZE:
+            //case WRONGMESSAGE:
+            {
+                formatstring(msg)(/*"Message error (%s (%i))"*/"Message error (wrong message size (%i))",
+//                    cheat_id == MESSAGESIZE ? "wrong message size" : "unknown message type",
+                    eint
+                );
+                break;
+            }
+/*            case SOUNDHACK:
+            {
+                formatstring(msg)("Unknown sound %i", eint);
+                break;
+            }*/
+            default:
+            {
+                return;
+            }
+        }
+        if(ac_public_message) sendservmsgf("Anti-Cheat - Cheater detected: %s - Cheat: %s", colorname(ci), msg);
+        else sendprivmsgf(PRIV_ADMIN, "Anti-Cheat - Cheater detected: %s - Cheat: %s", colorname(ci), msg);
+        if(ac_pban_clients) addpbanf(getclienthostname(ci->ownernum), "Banned by Anti-Cheat for cheating - Cheat: %s", msg);
+        disconnect_client(ci->ownernum, ac_pban_clients ? DISC_IPBAN : DISC_MSGERR);
+    }
+
+    struct fr
+    {
+        string scorer;
+        string map;
+        int scoremillis;
+        int mode;
+    };
+    vector<fr> frs;
+
+    void addflagrun(const char *name, const char *frmap, int frmillis, int frmode)
+    {
+        int id = frs.length();
+        frs.add();
+        copystring(frs[id].scorer, name);
+        copystring(frs[id].map, frmap);
+        frs[id].scoremillis = frmillis;
+        frs[id].mode = frmode;
+    }
+
+    ICOMMAND(flagrun, "ssii", (const char *n, const char *m, int *frmi, int *frmo), {
+        addflagrun(n, m, *frmi, *frmo);
+    });
+
+    void flagrun(clientinfo *ci, int frmillis)
+    {
+        if(gamespeed>100) return;
+        if(frmillis<flagrun_min_millis || !frmillis)
+        {
+            ac(ci, FLAGHACK, frmillis);
+            return;
+        }
+        fr *cur = 0;
+        loopv(frs) if(!strcmp(frs[i].map, smapname) && frs[i].mode == gamemode) cur = &frs[i];
+        bool isbest = false;
+        if(!cur)
+        {
+            addflagrun(ci->name, smapname, frmillis, gamemode);
+            isbest = true;
+        }
+        else
+        {
+            if(cur->scoremillis > frmillis)
+            {
+                copystring(cur->scorer, ci->name);
+                cur->scoremillis = frmillis;
+                isbest = true;
+            }
+        }
+        string message;
+        double frseconds = (double)frmillis/1000.0;
+        if(isbest)
+        {
+            formatstring(message)("%s\f1 has scored the flag in \f0%.3f \f1seconds (best)",
+                colorname(ci),
+                frseconds
+            );
+        }
+        else
+        {
+            double bestfrseconds = cur->scoremillis/1000;
+            formatstring(message)("%s\f1 has scored the flag in \f0%.3f \f1seconds (best: \f7%s\f1, \f0%.3f\f1)",
+                colorname(ci),
+                frseconds,
+                cur->scorer,
+                bestfrseconds
+            );
+        }
+        sendservmsg(message);
+    }
 
     #define SERVMODE 1
     #include "capture.h"
@@ -987,7 +1205,7 @@ namespace server
                 clientinfo *ci = team[i][j];
                 if(!strcmp(ci->team, teamnames[i])) continue;
                 copystring(ci->team, teamnames[i], MAXTEAMLEN+1);
-                sendf(-1, 1, "riisi", N_SETTEAM, ci->clientnum, teamnames[i], -1);
+                sendf(ci->isspy ? ci->ownernum : -1, 1, "riisi", N_SETTEAM, ci->clientnum, teamnames[i], -1);
             }
         }
     }
@@ -1364,7 +1582,6 @@ namespace server
     }
 
     extern void connected(clientinfo *ci);
-    void sendmsg(clientinfo *, const char *);
 
     VARP(hidepriv, 0, 0, 1);
 
@@ -1417,32 +1634,65 @@ namespace server
             allowedips.shrink(0);
         }
         string msg;
+        bool needshide = true;
         if(val && authname) 
         {
-            if(authdesc && authdesc[0]) formatstring(msg)("%s\fs\f1 claimed \fr%s\f1 as '\fs\f5%s\fr' [\fs\f0%s\fr]",
+            if(authdesc && authdesc[0]) formatstring(msg)("%s\fs\f1 claimed %s\fr%s\f1 as '\fs\f5%s\fr' [\fs\f0%s\fr]",
                 colorname(ci),
+                val > PRIV_AUTH && hidepriv ? "invisible " : "",
                 name,
                 authname,
                 authdesc
             );
-            else formatstring(msg)("%s\fs\f1 claimed \fr%s\f1 as '\fs\f5%s\fr'",
-                colorname(ci),
-                name,
-                authname
-            );
+            else
+            {
+                formatstring(msg)("%s\fs\f1 claimed \fr%s\f1 as '\fs\f5%s\fr'",
+                    colorname(ci),
+                    name,
+                    authname
+                );
+                needshide = false;
+            }
         } 
-        else formatstring(msg)("%s \fs\f1%s \fr%s", colorname(ci), val ? "claimed" : "relinquished", name);
+        else formatstring(msg)("%s \fs\f1%s %s\fr%s",
+            colorname(ci),
+            val ? "claimed" : "relinquished",
+            val > PRIV_AUTH && hidepriv ? "invisible " : "",
+            name
+        );
         packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
-        sendmsg(ci, msg);
+        if(hidepriv) sendmsg(ci, msg);
+        else
+        {
+            putint(p, N_SERVMSG);
+            sendstring(msg, p);
+        }
         putint(p, N_CURRENTMASTER);
         putint(p, mastermode);
-        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && (clients[i]->privilege <= PRIV_AUTH || !hidepriv))
+        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && (clients[i]->privilege <= PRIV_AUTH || !hidepriv || !needshide) && !clients[i]->isspy)
         {
             putint(p, clients[i]->clientnum);
             putint(p, clients[i]->privilege);
         }
         putint(p, -1);
         sendpacket(-1, 1, p.finalize());
+        if(hidepriv)
+        {
+            loopvj(clients) if(clients[j]->privilege >= PRIV_MASTER)
+            {
+                clientinfo *cx = clients[j];
+                packetbuf q(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+                putint(q, N_CURRENTMASTER);
+                putint(q, mastermode);
+                loopv(clients) if((clients[i]->privilege >= PRIV_MASTER && clients[i]->privilege <= cx->privilege && !clients[i]->isspy) || clients[i]->clientnum == cx->clientnum)
+                {
+                    putint(q, clients[i]->clientnum);
+                    putint(q, clients[i]->privilege);
+                }
+                putint(q, -1);
+                sendpacket(cx->clientnum, 1, q.finalize());
+            }
+        }
         checkpausegame();
         return true;
     }
@@ -1468,8 +1718,18 @@ namespace server
                     else formatstring(kicker)("%s as '\fs\f5%s\fr'", colorname(ci), authname);
                 }
                 else copystring(kicker, colorname(ci));
-                if(reason && reason[0]) sendservmsgf("%s kicked %s because: %s", kicker, colorname(vinfo), reason);
-                else sendservmsgf("%s kicked %s", kicker, colorname(vinfo));
+                string msg;
+                if(!ci->isspy)
+                {
+                    if(reason && reason[0]) formatstring(msg)("%s kicked %s because: %s", kicker, colorname(vinfo), reason);
+                    else formatstring(msg)("%s kicked %s", kicker, colorname(vinfo));
+                }
+                else
+                {
+                    if(reason && reason[0]) formatstring(msg)("%s was kicked because: %s", colorname(vinfo), reason);
+                    else formatstring(msg)("%s was kicked", colorname(vinfo));
+                }
+                sendservmsg(msg);
                 uint ip = getclientip(victim);
                 addban(ip, 4*60*60000);
                 kickclients(ip, ci, priv);
@@ -1771,6 +2031,7 @@ namespace server
 
     void putinitclient(clientinfo *ci, packetbuf &p)
     {
+        if(ci->isspy) return;
         if(ci->state.aitype != AI_NONE)
         {
             putint(p, N_INITAI);
@@ -1797,7 +2058,7 @@ namespace server
         loopv(clients)
         {
             clientinfo *ci = clients[i];
-            if(!ci->connected || ci->clientnum == exclude) continue;
+            if(!ci->connected || ci->clientnum == exclude || ci->isspy) continue;
 
             putinitclient(ci, p);
         }
@@ -1838,7 +2099,7 @@ namespace server
             putint(p, mastermode);
             hasmaster = true;
         }
-        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && (clients[i]->privilege <= PRIV_AUTH || !hidepriv))
+        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && (clients[i]->privilege <= PRIV_AUTH || !hidepriv) && !clients[i]->isspy)
         {
             if(!hasmaster)
             {
@@ -1910,6 +2171,7 @@ namespace server
             {
                 clientinfo *oi = clients[i];
                 if(ci && oi->clientnum==ci->clientnum) continue;
+                if(oi->isspy) continue;
                 putint(p, oi->clientnum);
                 putint(p, oi->state.state);
                 putint(p, oi->state.frags);
@@ -2016,7 +2278,7 @@ namespace server
             clientinfo *ci = clients[i];
             ci->mapchange();
             ci->state.lasttimeplayed = lastmillis;
-            if(m_mp(gamemode) && ci->state.state!=CS_SPECTATOR) sendspawn(ci);
+            if(m_mp(gamemode) && ci->state.state!=CS_SPECTATOR && !ci->isspy) sendspawn(ci);
         }
 
         aiman::changemap();
@@ -2257,11 +2519,14 @@ namespace server
     {
         gamestate &gs = ci->state;
         int wait = millis - gs.lastshot;
-        if(!gs.isalive(gamemillis) ||
-           wait<gs.gunwait ||
-           gun<GUN_FIST || gun>GUN_PISTOL ||
-           gs.ammo[gun]<=0 || (guns[gun].range && from.dist(to) > guns[gun].range + 1))
-            return;
+        // anticheat >
+        if(wait<gs.gunwait) { ac(ci, GUNHACKRELOAD, wait); return; }
+        if(gun<GUN_FIST || gun>GUN_PISTOL) { ac(ci, UNKNOWNGUN, gun); }
+        if(m_insta && gun!=GUN_FIST && gun!=GUN_RIFLE) { ac(ci, NONINSTAGUNININSTA, gun); return; }
+        if(guns[gun].range && from.dist(to) > guns[gun].range + 1) { ac(ci, GUNHACKRANGE, from.dist(to)); return; }
+        if(!gs.isalive(gamemillis)) { ac(ci, GUNHACKNOTALIVE); return; }
+        if(gs.ammo[gun]<=0) { ac(ci, GUNHACKNOAMMO); return; }
+        // < anticheat
         if(gun!=GUN_FIST) gs.ammo[gun]--;
         gs.lastshot = millis;
         gs.gunwait = guns[gun].attackdelay;
@@ -2281,10 +2546,15 @@ namespace server
                 {
                     hitinfo &h = hits[i];
                     clientinfo *target = getinfo(h.target);
-                    if(!target || target->state.state!=CS_ALIVE || h.lifesequence!=target->state.lifesequence || h.rays<1 || h.dist > guns[gun].range + 1) continue;
-
+                    if(!target || target->state.state!=CS_ALIVE || h.lifesequence!=target->state.lifesequence) continue;
+                    // anticheat >
+                    if(h.rays<1) { ac(ci, GENERICGUNHACK); return; }
+                    if(h.dist > guns[gun].range + 1) { ac(ci, GUNHACKRANGE, h.dist); return; }
+                    // < anticheat
                     totalrays += h.rays;
-                    if(totalrays>maxrays) continue;
+                    // anticheat >
+                    if(totalrays>maxrays) { ac(ci, GUNHACKRAYS, totalrays); return; }
+                    // < anticheat
                     int damage = h.rays*guns[gun].damage;
                     if(gs.quadmillis) damage *= 4;
                     dodamage(target, ci, damage, gun, h.dir);
@@ -2449,7 +2719,7 @@ namespace server
         loopv(clients)
         {
             clientinfo *ci = clients[i];
-            if(ci->state.state==CS_SPECTATOR || ci->state.aitype != AI_NONE) continue;
+            if(ci->state.state==CS_SPECTATOR || ci->state.aitype != AI_NONE || ci->isspy) continue;
             total++;
             if(!ci->clientmap[0])
             {
@@ -2470,7 +2740,7 @@ namespace server
         loopv(clients)
         {
             clientinfo *ci = clients[i];
-            if(ci->state.state==CS_SPECTATOR || ci->state.aitype != AI_NONE || ci->clientmap[0] || ci->mapcrc >= 0 || (req < 0 && ci->warned)) continue;
+            if(ci->state.state==CS_SPECTATOR || ci->state.aitype != AI_NONE || ci->clientmap[0] || ci->mapcrc >= 0 || (req < 0 && ci->warned) || ci->isspy) continue;
             formatstring(msg)("%s has modified map \"%s\"", colorname(ci), smapname);
             sendf(req, 1, "ris", N_SERVMSG, msg);
             if(forceSpec)
@@ -2487,7 +2757,7 @@ namespace server
             if(i || info.matches <= crcs[i+1].matches) loopvj(clients)
             {
                 clientinfo *ci = clients[j];
-                if(ci->state.state==CS_SPECTATOR || ci->state.aitype != AI_NONE || !ci->clientmap[0] || ci->mapcrc != info.crc || (req < 0 && ci->warned)) continue;
+                if(ci->state.state==CS_SPECTATOR || ci->state.aitype != AI_NONE || !ci->clientmap[0] || ci->mapcrc != info.crc || (req < 0 && ci->warned) || ci->isspy) continue;
                 formatstring(msg)("%s has modified map \"%s\"", colorname(ci), smapname);
                 sendf(req, 1, "ris", N_SERVMSG, msg);
                 if(forceSpec)
@@ -2552,7 +2822,7 @@ namespace server
             if(smode) smode->leavegame(ci, true);
             ci->state.timeplayed += lastmillis - ci->state.lasttimeplayed;
             savescore(ci);
-            sendf(-1, 1, "ri2", N_CDIS, n);
+            if(!ci->isspy) sendf(-1, 1, "ri2", N_CDIS, n);
             clients.removeobj(ci);
             aiman::removeai(ci);
             if(!numclients(-1, false, true)) noclients(); // bans clear when server empties
@@ -2949,6 +3219,7 @@ namespace server
         ci->mute = false;
         ci->emute = false;
         ci->nmute = false;
+        ci->isspy = false;
 
 #ifndef WIN32
         int i = is_mod_loaded("geolocation");
@@ -3116,10 +3387,6 @@ namespace server
         }
     }
     void debugf(bool s, bool e, int t, const char * n, const char * _e, const char * a, char * i [6], const char * _a, ...) { defvformatstring(__a, _a, _a); debug(s, e, t, n, _e, a, i, __a); }
-    void sendmsg(int cn, const char * msg) { sendf(cn, 1, "ris", N_SERVMSG, msg); }
-    void sendmsgf(int cn, const char * msg, ...) { defvformatstring(s, msg, msg); sendmsg(cn, s); }
-    void sendmsg(clientinfo * ci, const char * msg) { sendmsg(ci?ci->ownernum:-1, msg); }
-    void sendmsgf(clientinfo * ci, const char * msg, ...) { defvformatstring(s, msg, msg); sendmsg(ci?ci->ownernum:-1, s); }
 
     struct command
     {
@@ -3218,7 +3485,7 @@ namespace server
                 {
                     if(commands[i].priv > ci->privilege)
                     {
-                        sendmsg(ci, "Permission denied.");
+                        sendmsg(ci, "\f1Permission denied.");
                         return;
                     }
                 }
@@ -3227,7 +3494,7 @@ namespace server
             {
                 if(!strcmp(manpages[i].command, array[0]))
                 {
-                    sendmsgf(ci, "Help: #%s %s: %s", array[0], manpages[i].arguments, manpages[i].manpage);
+                    sendmsgf(ci, "\f1\fsHelp: \f4#\f7%s %s\fr\fs: %s\nVisit \f7https://github.com/SauerMod/SM-Server/wiki/man-db::%s \frfor a more detailed help.", array[0], manpages[i].arguments, manpages[i].manpage, array[0]);
                     return;
                 }
             }
@@ -3235,16 +3502,16 @@ namespace server
             {
                 if(!strcmp(commands[i].name, array[0]))
                 {
-                    sendmsgf(ci, "Help: No manpage for the command %s could be found.", array[0]);
+                    sendmsgf(ci, "\f1Help: No manpage for the command \fs\f7%s\fr could be found.", array[0]);
                     return;
                 }
             }
-            sendmsgf(ci, "Unknown command: %s", array[0]);
+            sendmsgf(ci, "\f1Unknown command: \f7%s", array[0]);
         }
         else
         {
             string message;
-            copystring(message, "Commands list: ");
+            copystring(message, "\f1Commands list: ");
             string bak;
             loopv(commands)
             {
@@ -3315,8 +3582,8 @@ namespace server
     }
 
     servcmd(info, {
-        sendmsg(ci, "\fs\f5info: \frrunning SM-Server Cube 2: Sauerbraten server modification.");
-        sendmsgf(ci, "\fs\f5info: \frrunning on a%s %s machine.", 
+        sendmsg(ci, "\f1\fs\f5info: \frrunning SM-Server Cube 2: Sauerbraten server modification.");
+        sendmsgf(ci, "\f1\fs\f5info: \frrunning on a%s %s machine.", 
             sizeof(void*) == 8 ? " x86_64" : "n i686",
 #ifdef _WIN32
                 "Windows"
@@ -3381,7 +3648,7 @@ namespace server
         defformatstring(hmsg)(" \fs\f0%i\fr hour%s,", Hours, Hours != 1 ? "s" : "");
         defformatstring(Mmsg)(" \fs\f0%i\fr minute%s and", Minutes, Minutes != 1 ? "s" : "");
         defformatstring(smsg)(" \fs\f0%i\fr second%s.", Seconds, Seconds != 1 ? "s" : "");
-        sendmsgf (ci, "\fs\f5info: \frthis server has been up for%s%s%s%s%s%s",
+        sendmsgf (ci, "\f1\fs\f5info: \frthis server has been up for%s%s%s%s%s%s",
             (totalsecs >= (60 * 60 * 24 * 30 * 12)) ? ymsg : "",
             (totalsecs >= (60 * 60 * 24 * 30)) ? mmsg : "",
             (totalsecs >= (60 * 60 * 24)) ? dmsg : "",
@@ -3565,25 +3832,42 @@ namespace server
 
     void givepriv(clientinfo *ci, int priv)
     {
+        packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
         if(!ci) return;
-        defformatstring(msg)("%s %s %s",
+        defformatstring(msg)("%s %s %s%s",
             colorname(ci),
             priv == PRIV_NONE ? "relinquished" : "claimed",
+            hidepriv && priv > PRIV_AUTH ? "\fs\f1invisible \fr" : "",
             privname(priv == PRIV_NONE ? ci->privilege : priv)
         );
-        ci->privilege = priv;
-        packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
-        putint(p, N_SERVMSG);
-        sendstring(msg, p);
+        sendmsg(ci, msg);
         putint(p, N_CURRENTMASTER);
         putint(p, mastermode);
-        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER)
+        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && (clients[i]->privilege <= PRIV_AUTH || !hidepriv) && !clients[i]->isspy)
         {
             putint(p, clients[i]->clientnum);
             putint(p, clients[i]->privilege);
         }
         putint(p, -1);
         sendpacket(-1, 1, p.finalize());
+        ci->privilege = priv;
+        if(hidepriv)
+        {
+            loopvj(clients) if(clients[j]->privilege >= PRIV_MASTER)
+            {
+                clientinfo *cx = clients[j];
+                packetbuf q(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+                putint(q, N_CURRENTMASTER);
+                putint(q, mastermode);
+                loopv(clients) if((clients[i]->privilege >= PRIV_MASTER && clients[i]->privilege <= cx->privilege && !clients[i]->isspy) || clients[i]->clientnum == cx->clientnum)
+                {
+                    putint(q, clients[i]->clientnum);
+                    putint(q, clients[i]->privilege);
+                }
+                putint(q, -1);
+                sendpacket(cx->clientnum, 1, q.finalize());
+            }
+        }
         checkpausegame();
     }
 
@@ -3598,7 +3882,7 @@ namespace server
             int cn = atoi(cns[i]);
             clientinfo *cx = getinfo(cn);
             if(!cx) { sendmsgf(ci, "Unknown client number: %i", cn); continue; }
-            if(cx->privilege >= ci->privilege) { sendmsg(ci, "Permission denied."); continue; }
+            if(cx->privilege >= ci->privilege && cx->clientnum != ci->clientnum) { sendmsg(ci, "Permission denied."); continue; }
             givepriv(cx, PRIV_MASTER);
         }
     })
@@ -3721,30 +4005,6 @@ namespace server
         sendf(-1, 1, "ri3", N_SPECTATOR, cn, 0);        
     })
 
-    struct pban
-    {
-        string IP;
-        string Reason;
-    };
-    vector <pban> pbans;
-
-    void addpban(const char *ip, const char *reason)
-    {
-        loopv(pbans) if(!strcmp(pbans[i].IP, ip)) return;
-        pban &_pban = pbans.add();
-        copystring(_pban.IP, ip);
-        copystring(_pban.Reason, reason);
-    }
-
-    inline void addpban(char *ip, char *reason)
-        { addpban((const char *)ip, (const char *)reason); }
-
-    inline bool ispban(const char *ip)
-        { loopv(pbans) if(!strcmp(pbans[i].IP, ip)) return true; return false; }
-
-    inline bool ispban(char *ip)
-        { return ispban((const char *)ip); }
-
     servcmd(pban, {
         char * Array[2];
         explodeString(args, Array, ' ', 2);
@@ -3790,7 +4050,7 @@ namespace server
             int cn = atoi(cns[i]);
             clientinfo *cx = getinfo(cn);
             if(!cx) { sendmsgf(ci, "Unknown client number: %i", cn); continue; }
-            if(cx->privilege >= ci->privilege) { sendmsg(ci, "Permission denied."); continue; }
+            if(cx->privilege >= ci->privilege && cx->clientnum != ci->clientnum) { sendmsg(ci, "Permission denied."); continue; }
             givepriv(cx, PRIV_ADMIN);
         }
     })
@@ -3806,9 +4066,137 @@ namespace server
             int cn = atoi(cns[i]);
             clientinfo *cx = getinfo(cn);
             if(!cx) { sendmsgf(ci, "Unknown client number: %i", cn); continue; }
-            if(cx->privilege >= ci->privilege) { sendmsg(ci, "Permission denied."); continue; }
+            if(cx->privilege >= ci->privilege && cx->clientnum != ci->clientnum) { sendmsg(ci, "Permission denied."); continue; }
             givepriv(cx, PRIV_NONE);
         }
+    })
+
+    servcmd(spy, {
+        char*array[2];
+        explodeString(args, array, ' ', 2);
+        bool newvalue;
+        if(!array[0]) newvalue = ci->isspy ? false : true;
+        else
+        {
+            int i = atoi(array[0]);
+            newvalue = (i!=0) ? true : false;
+        }
+        if(newvalue)
+        {
+            if(ci->state.state!=CS_SPECTATOR)
+            {
+                if(ci->state.state==CS_ALIVE) suicide(ci);
+                if(smode) smode->leavegame(ci);
+                ci->state.timeplayed += lastmillis - ci->state.lasttimeplayed;
+            }
+            aiman::removeai(ci);
+            ci->forcespec = true;
+            if(ci->privilege >= PRIV_MASTER && (ci->privilege <= PRIV_AUTH || !hidepriv))
+            {
+                packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+                defformatstring(tmp)("%s relinquished %s", colorname(ci), privname(ci->privilege));
+                putint(p, N_SERVMSG);
+                sendstring(tmp, p);
+                putint(p, N_CURRENTMASTER);
+                putint(p, mastermode);
+                loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && (clients[i]->privilege <= PRIV_AUTH || !hidepriv) && !clients[i]->isspy)
+                {
+                    putint(p, clients[i]->clientnum);
+                    putint(p, clients[i]->privilege);
+                }
+                putint(p, -1);
+                sendpacket(-1, 1, p.finalize());
+                if(hidepriv)
+                {
+                    loopvj(clients) if(clients[j]->privilege >= PRIV_MASTER)
+                    {
+                        clientinfo *cx = clients[j];
+                        packetbuf q(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+                        putint(q, N_CURRENTMASTER);
+                        putint(q, mastermode);
+                        loopv(clients) if((clients[i]->privilege >= PRIV_MASTER && clients[i]->privilege <= cx->privilege && !clients[i]->isspy) || clients[i]->clientnum == cx->clientnum)
+                        {
+                            putint(q, clients[i]->clientnum);
+                            putint(q, clients[i]->privilege);
+                        }
+                        putint(q, -1);
+                        sendpacket(cx->clientnum, 1, q.finalize());
+                    }
+                }
+                else
+                {
+                    packetbuf q(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+                    putint(q, N_CURRENTMASTER);
+                    putint(q, mastermode);
+                    loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->isspy)
+                    {
+                        putint(q, clients[i]->clientnum);
+                        putint(q, clients[i]->privilege);
+                    }
+                    putint(q, -1);
+                    sendpacket(ci->ownernum, 1, q.finalize());
+                }
+            }
+            sendf(-1, 1, "rxi2", ci->clientnum, N_CDIS, ci->clientnum);
+            sendf(ci->clientnum, 1, "ri3", N_SPECTATOR, ci->clientnum, 1);
+            sendmsg(ci, "\f3{SPY} \f1You have joined the spy-mode.");
+        }
+        else
+        {
+            // here bitch
+            packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+            putint(p, N_INITCLIENT);
+            putint(p, ci->clientnum);
+            sendstring(ci->name, p);
+            sendstring(ci->team, p);
+            putint(p, ci->playermodel);
+            sendpacket(-1, 1, p.finalize());
+            aiman::addclient(ci);
+            ci->forcespec = false;
+            sendf(-1, 1, "riii", N_SPECTATOR, ci->clientnum, ci->state.state==CS_SPECTATOR ? 1 : 0);
+#ifndef WIN32
+            int i = is_mod_loaded("geolocation");
+            if(i >= 0)
+            {
+                char *z[16];
+                z[0] = (char*)colorname(ci);
+                z[1] = (char*)getclienthostname(ci->clientnum);
+                modules[i].function(z);
+            }
+#endif
+            if(hidepriv)
+            {
+                loopvj(clients) if(clients[j]->privilege >= PRIV_MASTER)
+                {
+                    clientinfo *cx = clients[j];
+                    packetbuf q(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+                    putint(q, N_CURRENTMASTER);
+                    putint(q, mastermode);
+                    loopv(clients) if((clients[i]->privilege >= PRIV_MASTER && clients[i]->privilege <= cx->privilege && !clients[i]->isspy) || clients[i]->clientnum == cx->clientnum)
+                    {
+                        putint(q, clients[i]->clientnum);
+                        putint(q, clients[i]->privilege);
+                    }
+                    putint(q, -1);
+                    sendpacket(cx->clientnum, 1, q.finalize());
+                }
+            }
+            else
+            {
+                packetbuf q(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+                putint(q, N_CURRENTMASTER);
+                putint(q, mastermode);
+                loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->isspy)
+                {
+                    putint(q, clients[i]->clientnum);
+                    putint(q, clients[i]->privilege);
+                }
+                putint(q, -1);
+                sendpacket(ci->clientnum, 1, q.finalize());
+            }
+            sendmsg(ci, "\f3{SPY} \f1You have left the spy-mode.");
+        }
+        ci->isspy = newvalue;
     })
 
     servcmd(halt, {
@@ -3897,14 +4285,22 @@ namespace server
         stream *f = openutf8file("pban.cfg", "w");
         if(f)
         {
-            f->printf("// Automatically generated by SauerModServer - do not edit.\n");
+            f->printf("// Automatically generated by SM-Server - do not edit.\n");
             f->printf("// Contains a list of permamently banned clients.\n");
             loopv(pbans) f->printf("pban %s %s\n", pbans[i].IP, pbans[i].Reason);
             delete f;
         }
+        stream *ff = openutf8file("flagruns.cfg", "w");
+        if(ff)
+        {
+            ff->printf("// Automatically generated by SM-Server - do not edit.\n");
+            ff->printf("// Contains a list of flagruns.\n");
+            loopv(frs) f->printf("flagrun %s %s %i %i", frs[i].scorer, frs[i].map, frs[i].scoremillis, frs[i].mode);
+            delete ff;
+        }
     }
 
-    void initcmds() // Also initializes "global" functions, that means the functions that are shared with modules.
+    void initcmds() // Also initializes "global" functions, these are the functions that are shared with modules.
     {
         // Player commands that require no privileges
         addcmd("help", PRIV_NONE, servcmdname(help));
@@ -3958,6 +4354,8 @@ namespace server
         addman("giveadmin", "<cn[,cn2[,...]]>", "gives admin privileges to a client.");
         addcmd("revokepriv", PRIV_ADMIN, servcmdname(revokepriv));
         addman("revokepriv", "<cn[,cn2[,...]]>", "revokes a client's privileges.");
+        addcmd("spy", PRIV_ADMIN, servcmdname(spy));
+        addman("spy", "[0/1]", "Toggles spy mode.");
         // Player commands that require owner privileges
         addcmd("halt", PRIV_OWNER, servcmdname(halt));
         addman("halt", "", "Closes the server.");
@@ -4143,7 +4541,7 @@ namespace server
             case N_EDITMODE:
             {
                 int val = getint(p);
-                if(!ci->local && !m_edit) { disconnect_client(sender, DISC_MSGERR); return; };
+                if(!ci->local && !m_edit) { ac(ci, EDITMODE); return; };
                 if(ci->emute) return;
                 if(val ? ci->state.state!=CS_ALIVE && ci->state.state!=CS_DEAD : ci->state.state!=CS_EDITING) break;
                 if(smode)
@@ -4190,7 +4588,7 @@ namespace server
                 break;
 
             case N_TRYSPAWN:
-                if(!ci || !cq || cq->state.state!=CS_DEAD || cq->state.lastspawn>=0 || (smode && !smode->canspawn(cq))) break;
+                if(!ci || !cq || cq->state.state!=CS_DEAD || cq->state.lastspawn>=0 || (smode && !smode->canspawn(cq)) || ci->isspy) break;
                 if(!ci->clientmap[0] && !ci->mapcrc)
                 {
                     ci->mapcrc = -1;
@@ -4218,7 +4616,7 @@ namespace server
             case N_SPAWN:
             {
                 int ls = getint(p), gunselect = getint(p);
-                if(!cq || (cq->state.state!=CS_ALIVE && cq->state.state!=CS_DEAD) || ls!=cq->state.lifesequence || cq->state.lastspawn<0) break;
+                if(!cq || (cq->state.state!=CS_ALIVE && cq->state.state!=CS_DEAD) || ls!=cq->state.lifesequence || cq->state.lastspawn<0 || ci->isspy) break;
                 cq->state.lastspawn = -1;
                 cq->state.state = CS_ALIVE;
                 cq->state.gunselect = gunselect >= GUN_FIST && gunselect <= GUN_PISTOL ? gunselect : GUN_FIST;
@@ -4311,6 +4709,11 @@ namespace server
                     return;
                 }
                 if(cq->mute) return;
+                if(cq->isspy)
+                {
+                    sendservmsgf("\f3{REMOTE} \f7%s\f1: %s", colorname(cq), text);
+                    return;
+                }
                 if(cq->state.state==CS_SPECTATOR && smute)
                 {
                     loopv(clients)
@@ -4331,7 +4734,17 @@ namespace server
             case N_SAYTEAM:
             {
                 getstring(text, p);
-                if(!ci || !cq || !m_teammode || !cq->team[0]) return;
+                if(!ci || !cq) return;
+                if(cq->isspy)
+                {
+                    loopv(clients)
+                    {
+                        clientinfo *t = clients[i];
+                        if(!t->isspy) continue;
+                        sendmsgf(t, "\f3{REMOTE-CHAT} \f7%s\f1: %s", colorname(cq), text);
+                    }
+                    return;
+                }
                 if(cq->mute) return;
                 if(cq->state.state==CS_SPECTATOR)
                 {
@@ -4343,6 +4756,7 @@ namespace server
                     }
                     return;
                 }
+                if(!m_teammode || !cq->team[0]) return;
                 loopv(clients)
                 {
                     clientinfo *t = clients[i];
@@ -4422,10 +4836,10 @@ namespace server
             case N_REPLACE:
             case N_DELCUBE:
             {
-                int size = server::msgsizelookup (type);
-                if(size <= 0) { disconnect_client(sender, DISC_MSGERR); return; }
+                int size = server::msgsizelookup(type);
+                if(size <= 0) { ac(ci, MESSAGESIZE, size); return; }
                 loopi(size - 1) getint(p);
-                if(!m_edit) { disconnect_client(sender, DISC_MSGERR); return; }
+                if(!m_edit) { ac(ci, EDITMSG); return; }
                 if(ci->emute) return;
                 if(cq && (ci != cq || ci->state.state!=CS_SPECTATOR)) { QUEUE_AI; QUEUE_MSG; }
                 break;
@@ -4437,7 +4851,7 @@ namespace server
                 loopk(3) getint(p);
                 int type = getint(p);
                 loopk(5) getint(p);
-                if(!m_edit) { disconnect_client(sender, DISC_MSGERR); return; }
+                if(!m_edit) { ac(ci, EDITENT); return; }
                 if(ci->emute) return;
                 if(!ci || ci->state.state==CS_SPECTATOR) break;
                 QUEUE_MSG;
@@ -4482,7 +4896,7 @@ namespace server
                     ci->ping = ping;
                     loopv(ci->bots) ci->bots[i]->ping = ping;
                 }
-                QUEUE_MSG;
+                if(!ci->isspy) QUEUE_MSG;
                 break;
             }
 
@@ -4805,7 +5219,7 @@ namespace server
             default: genericmsg:
             {
                 int size = server::msgsizelookup(type);
-                if(size<=0) { disconnect_client(sender, DISC_MSGERR); return; }
+                if(size<=0) { ac(ci, MESSAGESIZE, size); disconnect_client(sender, DISC_MSGERR); return; }
                 loopi(size-1) getint(p);
                 if(ci && cq && (ci != cq || ci->state.state!=CS_SPECTATOR)) { QUEUE_AI; QUEUE_MSG; }
                 break;
@@ -4819,6 +5233,8 @@ namespace server
     const char *defaultmaster() { return "sauerbraten.org"; }
     int masterport() { return SAUERBRATEN_MASTER_PORT; }
     int numchannels() { return 3; }
+
+    VAR(serverhideip, 0, 1, 1);
 
     #include "extinfo.h"
 

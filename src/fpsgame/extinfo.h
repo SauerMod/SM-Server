@@ -47,7 +47,7 @@
         putint(q, ci->state.gunselect);
         putint(q, ci->privilege);
         putint(q, ci->state.state);
-        uint ip = getclientip(ci->clientnum);
+        uint ip = serverhideip ? 0 : getclientip(ci->clientnum);
         q.put((uchar*)&ip, 3);
         sendserverinforeply(q);
     }

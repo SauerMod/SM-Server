@@ -1,5 +1,25 @@
 Changelog
 =========
+0.2.0:
+	* Added spy system.
+	* Now displaying flagruns.
+	* Improved anticheat:
+	  -> Gun hacks checks:
+	  	-> Generic gunhack
+	    -> Gun reload time
+	    -> Gun range
+	    -> Gun rays
+	    -> Non-insta weapons in instagib.
+	    -> Unknown gun.
+	  -> Message size checks.
+	  -> Flag hack checks.
+	* Improved hiddenprivs.
+	  -> You can now see your own privilege.
+	  -> You can see clients with privilege lower or same as yours.
+	* Edited geolocation module.
+	* Changed some messages coloring.
+	* Now possible to hide players IP-Addresses in extinfo.
+	* Some other small changes and improvements.
 0.1.6:
 	* Fixed loadmod command.
 	* Some small style changes in #load #unload and #reload messages.
