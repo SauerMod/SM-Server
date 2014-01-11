@@ -31,6 +31,7 @@
 
     void extinfoplayer(ucharbuf &p, clientinfo *ci)
     {
+        if(ci->isspy) return;
         ucharbuf q = p;
         putint(q, EXT_PLAYERSTATS_RESP_STATS); // send player stats following
         putint(q, ci->clientnum); //add player id
@@ -45,7 +46,7 @@
         putint(q, ci->state.health);
         putint(q, ci->state.armour);
         putint(q, ci->state.gunselect);
-        putint(q, ci->privilege);
+        putint(q, hidepriv ? 0 : (ci->privilege == PRIV_OWNER) ? PRIV_ADMIN : ci->privilege);
         putint(q, ci->state.state);
         uint ip = serverhideip ? 0 : getclientip(ci->clientnum);
         q.put((uchar*)&ip, 3);
@@ -72,7 +73,8 @@
         loopv(clients)
         {
             clientinfo *ci = clients[i];
-            if(ci->state.state!=CS_SPECTATOR && ci->team[0] && scores.htfind(ci->team) < 0)
+            if(ci->isspy) continue;
+            if(ci->state.state!=CS_SPECTATOR && !ci->isspy && ci->team[0] && scores.htfind(ci->team) < 0)
             {
                 if(smode && smode->hidefrags()) scores.add(teamscore(ci->team, 0));
                 else { teaminfo *ti = teaminfos.access(ci->team); scores.add(teamscore(ci->team, ti ? ti->frags : 0)); }
@@ -105,7 +107,7 @@
                 if(cn >= 0)
                 {
                     loopv(clients) if(clients[i]->clientnum == cn) { ci = clients[i]; break; }
-                    if(!ci)
+                    if(!ci || ci->isspy)
                     {
                         putint(p, EXT_ERROR); //client requested by id was not found
                         sendserverinforeply(p);
@@ -118,11 +120,11 @@
                 ucharbuf q = p; //remember buffer position
                 putint(q, EXT_PLAYERSTATS_RESP_IDS); //send player ids following
                 if(ci) putint(q, ci->clientnum);
-                else loopv(clients) putint(q, clients[i]->clientnum);
+                else loopv(clients) if(!clients[i]->isspy) putint(q, clients[i]->clientnum);
                 sendserverinforeply(q);
             
                 if(ci) extinfoplayer(p, ci);
-                else loopv(clients) extinfoplayer(p, clients[i]);
+                else loopv(clients) if(!clients[i]->isspy) extinfoplayer(p, clients[i]);
                 return;
             }
 
