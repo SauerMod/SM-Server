@@ -3597,7 +3597,7 @@ namespace server
 
     servcmd(info, {
         sendmsg(ci, "\fs\f6info: \frrunning SM-Server Cube 2: Sauerbraten server modification.");
-        sendmsgf(ci, "\fs\65info: \frrunning on a%s %s machine.", 
+        sendmsgf(ci, "\fs\f6info: \frrunning on a%s %s machine.", 
             sizeof(void*) == 8 ? " x86_64" : "n i686",
 #ifdef _WIN32
                 "Windows"
