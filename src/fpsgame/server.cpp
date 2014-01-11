@@ -3596,8 +3596,8 @@ namespace server
     }
 
     servcmd(info, {
-        sendmsg(ci, "\f1\fs\f5info: \frrunning SM-Server Cube 2: Sauerbraten server modification.");
-        sendmsgf(ci, "\f1\fs\f5info: \frrunning on a%s %s machine.", 
+        sendmsg(ci, "\fs\f6info: \frrunning SM-Server Cube 2: Sauerbraten server modification.");
+        sendmsgf(ci, "\fs\65info: \frrunning on a%s %s machine.", 
             sizeof(void*) == 8 ? " x86_64" : "n i686",
 #ifdef _WIN32
                 "Windows"
@@ -3662,7 +3662,7 @@ namespace server
         defformatstring(hmsg)(" \fs\f0%i\fr hour%s,", Hours, Hours != 1 ? "s" : "");
         defformatstring(Mmsg)(" \fs\f0%i\fr minute%s and", Minutes, Minutes != 1 ? "s" : "");
         defformatstring(smsg)(" \fs\f0%i\fr second%s.", Seconds, Seconds != 1 ? "s" : "");
-        sendmsgf (ci, "\f1\fs\f5info: \frthis server has been up for%s%s%s%s%s%s",
+        sendmsgf (ci, "\fs\f6info: \frthis server has been up for%s%s%s%s%s%s",
             (totalsecs >= (60 * 60 * 24 * 30 * 12)) ? ymsg : "",
             (totalsecs >= (60 * 60 * 24 * 30)) ? mmsg : "",
             (totalsecs >= (60 * 60 * 24)) ? dmsg : "",
