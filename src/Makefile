@@ -1,4 +1,4 @@
-CXXFLAGS= -Ofast -fomit-frame-pointer -ffast-math -march=native -pipe -fstack-protector
+CXXFLAGS= -O3 -fomit-frame-pointer -ffast-math -march=native
 override CXXFLAGS+= -Wall -fsigned-char -fno-exceptions -fno-rtti
 
 PLATFORM= $(shell uname -s)

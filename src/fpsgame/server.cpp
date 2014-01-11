@@ -1639,7 +1639,7 @@ namespace server
         {
             if(authdesc && authdesc[0]) formatstring(msg)("%s\fs\f1 claimed %s\fr%s\f1 as '\fs\f5%s\fr' [\fs\f0%s\fr]",
                 colorname(ci),
-                val > PRIV_AUTH && hidepriv ? "invisible " : "",
+                hidepriv ? "invisible " : "",
                 name,
                 authname,
                 authdesc
