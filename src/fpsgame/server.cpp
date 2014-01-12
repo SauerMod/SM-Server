@@ -3591,7 +3591,7 @@ namespace server
             {
                 if(!strcmp(manpages[i].command, array[0]))
                 {
-                    sendmsgf(ci, "\f1\fsHelp: \f4#\f7%s %s\fr\fs: %s\nVisit \f7https://github.com/SauerMod/SM-Server/wiki/man-db::%s \frfor a more detailed help.", array[0], manpages[i].arguments, manpages[i].manpage, array[0]);
+                    sendmsgf(ci, "\f1\fsHelp: \f4#\f7%s %s\fr\fs: %s", array[0], manpages[i].arguments, manpages[i].manpage);
                     return;
                 }
             }
@@ -4080,6 +4080,7 @@ namespace server
             clientinfo *cx = getinfo(atoi(cns[i]));
             if(!cx) { sendmsgf(ci, "\f0[RENAME]\f7: \f3Unknown \f2client \f1number\f7: \f0%i", atoi(cns[i])); continue; }
             if(cx != ci && cx->privilege >= ci->privilege) { sendmsg(ci, "\f0[RENAME]\f7: Permission \f3denied\f7."); continue; }
+            if(!strcmp(cx->name, array[1])) continue;
             copystring(cx->name, (const char*)array[1]);
             uchar buf[MAXSTRLEN];
             ucharbuf b(buf, MAXSTRLEN);

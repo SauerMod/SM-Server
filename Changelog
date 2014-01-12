@@ -1,5 +1,8 @@
 Changelog
 =========
+0.2.3:
+	* Minimal rename changes.
+	* Some other minimal changes.
 0.2.2:
 	* Added #sendto -1
 	* Changed a lot of messages style.
