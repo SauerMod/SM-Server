@@ -1,5 +1,19 @@
 Changelog
 =========
+0.2.2:
+	* Added #sendto -1
+	* Changed a lot of messages style.
+	* Fixed some invpriv stuff.
+	* GAuth is not invisible.
+	* Added a player command which enables autosendto after sendmap, also added
+	  .. an option in server config for it. Autosendto also delivers map to
+	  .. connecting clients.
+	* Added player commands
+	  -> #autosendto
+	  -> #flagrun
+	  -> #rename
+	  -> #intermission
+	* Fixed some flagruns system problems.
 0.2.1:
 	* Small spy bugfix.
 0.2.0:

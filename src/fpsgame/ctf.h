@@ -297,7 +297,6 @@ struct ctfclientmode : clientmode
                 dropflag(i, o.tovec().div(DMF), lastmillis, dropper ? dropper->clientnum : ci->clientnum, dropper && dropper!=ci);
             }
         }
-        ci->lasttakeflag = 0;
     }
 
     void leavegame(clientinfo *ci, bool disconnecting = false)
@@ -350,8 +349,8 @@ struct ctfclientmode : clientmode
             if(ci->lasttakeflag)
             {
                 flagrun(ci, gamemillis - ci->lasttakeflag);
+                ci->lasttakeflag = 0;
             }
-            ci->lasttakeflag = 0;
         }
         sendf(-1, 1, "rii9", N_SCOREFLAG, ci->clientnum, relay, relay >= 0 ? ++flags[relay].version : -1, goal, ++flags[goal].version, flags[goal].spawnindex, team, score, ci->state.flags);
         if(score >= FLAGLIMIT) startintermission();
@@ -367,7 +366,9 @@ struct ctfclientmode : clientmode
         {
             loopvj(flags) if(flags[j].owner==ci->clientnum) return;
             ownflag(i, ci->clientnum, lastmillis);
-            ci->lasttakeflag = gamemillis;
+            ci->state.stolen++;
+            if(!f.droptime && !m_protect && !m_hold) ci->lasttakeflag = gamemillis;
+            else ci->lasttakeflag = 0;
             sendf(-1, 1, "ri4", N_TAKEFLAG, ci->clientnum, i, ++f.version);
         }
         else if(m_protect)
@@ -377,6 +378,7 @@ struct ctfclientmode : clientmode
         else if(f.droptime)
         {
             returnflag(i);
+            ci->state.returned++;
             sendf(-1, 1, "ri4", N_RETURNFLAG, ci->clientnum, i, ++f.version);
         }
         else

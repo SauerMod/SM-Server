@@ -123,7 +123,7 @@ namespace server
         int lastdeath, deadflush, lastspawn, lifesequence;
         int lastshot;
         projectilestate<8> rockets, grenades;
-        int frags, flags, deaths, teamkills, shotdamage, damage, tokens;
+        int frags, flags, deaths, teamkills, shotdamage, damage, tokens, returned, stolen;
         int lasttimeplayed, timeplayed;
         float effectiveness;
 
@@ -306,6 +306,8 @@ namespace server
             mapcrc = 0;
             warned = false;
             gameclip = false;
+            state.stolen = 0;
+            state.returned = 0;
         }
 
         void reassign()
@@ -1021,7 +1023,7 @@ namespace server
 
     void flagrun(clientinfo *ci, int frmillis)
     {
-        if(gamespeed>100) return;
+        if(gamespeed!=100) return;
         if(frmillis<flagrun_min_millis || !frmillis)
         {
             ac(ci, FLAGHACK, frmillis);
@@ -1048,15 +1050,15 @@ namespace server
         double frseconds = (double)frmillis/1000.0;
         if(isbest)
         {
-            formatstring(message)("%s\f1 has scored the flag in \f0%.3f \f1seconds (best)",
+            formatstring(message)("\f0[FLAGRUN]\f7: \f1%s \f7has scored the \f2flag \f7in \f0%.3f \f6seconds \f7(\f3best\f7).",
                 colorname(ci),
                 frseconds
             );
         }
         else
         {
-            double bestfrseconds = cur->scoremillis/1000;
-            formatstring(message)("%s\f1 has scored the flag in \f0%.3f \f1seconds (best: \f7%s\f1, \f0%.3f\f1)",
+            double bestfrseconds = (double)cur->scoremillis/1000;
+            formatstring(message)("\f0[FLAGRUN]\f7: \f1%s \f7has scored the \f2flag \f7in \f0%.3f \f6seconds \f7(\f3best\f7: \f1%s\f7, \f0%.3f \f6seconds\f7).",
                 colorname(ci),
                 frseconds,
                 cur->scorer,
@@ -1585,6 +1587,38 @@ namespace server
 
     VARP(hidepriv, 0, 0, 1);
 
+    const char * privcolor(int priv)
+    {
+        switch (priv)
+        {
+            case PRIV_MASTER:
+                return "\f0";
+            case PRIV_AUTH:
+                return "\f1";
+            case PRIV_ADMIN:
+                return "\f6";
+            case PRIV_OWNER:
+                return "\f3";
+            case PRIV_NONE:
+            default:
+                return "\f7";
+        }
+    }
+
+    const char * privcolor(const char *name)
+    {
+        if(!strcmp(name, "master"))
+            return "\f0";
+        else if(!strcmp(name, "auth"))
+            return "\f1";
+        else if(!strcmp(name, "admin"))
+            return "\f6";
+        else if(!strcmp(name, "owner"))
+            return "\f3";
+        else
+            return "\f7"; 
+    }
+
     bool setmaster(clientinfo *ci, bool val, const char *pass = "", const char *authname = NULL, const char *authdesc = NULL, int authpriv = PRIV_MASTER, bool force = false, bool trial = false)
     {
         if(authname && !val) return false;
@@ -1637,31 +1671,38 @@ namespace server
         bool needshide = true;
         if(val && authname) 
         {
-            if(authdesc && authdesc[0]) formatstring(msg)("%s\fs\f1 claimed %s\fr%s\f1 as '\fs\f5%s\fr' [\fs\f0%s\fr]",
+            if(authdesc && authdesc[0]) formatstring(msg)("\f1%s\f7 claimed %s%s%s\f7 as \f5'\f2%s\f5' \f7[\fs\f0%s\f7]",
                 colorname(ci),
-                hidepriv ? "invisible " : "",
+                hidepriv ? "\f4invisible " : "",
+                privcolor(ci->privilege),
                 name,
                 authname,
                 authdesc
             );
             else
             {
-                formatstring(msg)("%s\fs\f1 claimed \fr%s\f1 as '\fs\f5%s\fr'",
+                formatstring(msg)("\f1%s\f7 claimed %s%s\f7 as \f5'\f2%s\f5'",
                     colorname(ci),
+                    privcolor(ci->privilege),
                     name,
                     authname
                 );
                 needshide = false;
             }
         } 
-        else formatstring(msg)("%s \fs\f1%s %s\fr%s",
+        else formatstring(msg)("\f1%s \f7%s %s%s%s",
             colorname(ci),
             val ? "claimed" : "relinquished",
-            val > PRIV_AUTH && hidepriv ? "invisible " : "",
+            privcolor(name),
+            val > PRIV_AUTH && hidepriv ? "\f4invisible " : "",
             name
         );
         packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
-        if(hidepriv) sendmsg(ci, msg);
+        if(hidepriv && needshide)
+        {
+            sendmsg(ci, msg);
+            loopv(clients) if(clients[i]->privilege >= ci->privilege && clients[i] != ci) sendmsg(clients[i], msg);
+        }
         else
         {
             putint(p, N_SERVMSG);
@@ -1669,8 +1710,9 @@ namespace server
         }
         putint(p, N_CURRENTMASTER);
         putint(p, mastermode);
-        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && (clients[i]->privilege <= PRIV_AUTH || !hidepriv || !needshide) && !clients[i]->isspy)
+        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->isspy)
         {
+            if((clients[i]->privilege > PRIV_AUTH && !hidepriv) || (clients[i]->clientnum == ci->clientnum && needshide)) continue;
             putint(p, clients[i]->clientnum);
             putint(p, clients[i]->privilege);
         }
@@ -1678,6 +1720,16 @@ namespace server
         sendpacket(-1, 1, p.finalize());
         if(hidepriv)
         {
+            packetbuf z(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+            putint(z, N_CURRENTMASTER);
+            putint(z, mastermode);
+            loopvj(clients) if(clients[j]->privilege == PRIV_MASTER || clients[j]->privilege == PRIV_AUTH)
+            {
+                putint(z, clients[j]->clientnum);
+                putint(z, clients[j]->privilege);
+            }
+            putint(z, -1);
+            sendpacket(-1, 1, z.finalize());
             loopvj(clients) if(clients[j]->privilege >= PRIV_MASTER)
             {
                 clientinfo *cx = clients[j];
@@ -2099,7 +2151,7 @@ namespace server
             putint(p, mastermode);
             hasmaster = true;
         }
-        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && (clients[i]->privilege <= PRIV_AUTH || !hidepriv) && !clients[i]->isspy)
+        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->isspy)
         {
             if(!hasmaster)
             {
@@ -2107,8 +2159,11 @@ namespace server
                 putint(p, mastermode);
                 hasmaster = true;
             }
-            putint(p, clients[i]->clientnum);
-            putint(p, clients[i]->privilege);
+            if(!hidepriv || clients[i]->privilege == PRIV_MASTER || clients[i]->privilege == PRIV_AUTH)
+            {
+                putint(p, clients[i]->clientnum);
+                putint(p, clients[i]->privilege);
+            }
         }
         if(hasmaster) putint(p, -1);
         if(gamepaused)
@@ -2408,6 +2463,34 @@ namespace server
         {
             sendf(-1, 1, "ri2", N_TIMEUP, 0);
             if(smode) smode->intermission();
+            string message;
+            string bak;
+            loopv(clients)
+            {
+                clientinfo *ci = clients[i];
+                formatstring(message)("\f0[STATS]\f7: \f1Your \f2game \f6statistics \f7for this \f2match\f7: \f4%i \f6frags \f7- \f4%i \f2deaths \f0(kpd: \f4%.3f) \f7/ \f3accuracy: \f4%.3f%%",
+                    ci->state.frags,
+                    ci->state.deaths,
+                    ((float)ci->state.frags/max(ci->state.deaths, 1)),
+                    (float)(ci->state.damage*100/max(ci->state.shotdamage, 1))
+                );
+                if(m_teammode)
+                {
+                    copystring(bak, message);
+                    formatstring(message)("%s \f7/ \f4%i \f5teamkills", bak, ci->state.teamkills);
+                }
+                if(m_ctf || m_collect)
+                {
+                    copystring(bak, message);
+                    formatstring(message)("%s \f7/ \f2%s \f1scored: \f4%i", bak, (m_ctf && !m_collect) ? "flags" : "skulls", ci->state.flags);
+                    if(!m_collect)
+                    {
+                        copystring(bak, message);
+                        formatstring(message)("%s \f7/ \f2flags \f0stolen: \f4%i \f7/ \f2flags \f5returned: \f4%i", bak, ci->state.stolen, ci->state.returned);
+                    }
+                }
+                sendmsg(ci, message);
+            }
             changegamespeed(100);
             interm = gamemillis + 10000;
         }
@@ -3039,6 +3122,8 @@ namespace server
             addgban(val);
     }
 
+    VAR(autosendto, 0, 0, 1);
+
     void receivefile(int sender, uchar *data, int len)
     {
         if(!m_edit || len > 8*1024*1024) return;
@@ -3050,6 +3135,19 @@ namespace server
         if(!mapdata) { sendf(sender, 1, "ris", N_SERVMSG, "failed to open temporary file for map"); return; }
         mapdata->write(data, len);
         sendservmsgf("[%s sent a map to server, \"/getmap\" to receive it]", colorname(ci));
+        if(autosendto)
+        {
+            loopvj(clients)
+            {
+                clientinfo *cx = clients[j];
+                if(!cx || cx->ownernum == ci->ownernum) continue;
+                if(!mapdata || cx->getmap) return;
+                sendservmsgf("\f0[INFO]\f7: Automatically delivering the \f1map\f7 to \f2%s\f7.", colorname(cx));
+                if((cx->getmap = sendfile(cx->clientnum, 2, mapdata, "ri", N_SENDMAP)))
+                    cx->getmap->freeCallback = freegetmap;
+                cx->needclipboard = totalmillis ? totalmillis : 1;
+            }
+        }
     }
 
     void sendclipboard(clientinfo *ci)
@@ -3234,6 +3332,9 @@ namespace server
         }
 
         ci->isspy = false;
+
+        ci->state.stolen = 0;
+        ci->state.returned = 0;
 
 #ifndef WIN32
         int i = is_mod_loaded("geolocation");
@@ -3430,24 +3531,6 @@ namespace server
 #define servcmd(name, func) void __servcmd_##name (const char * args, clientinfo * ci) \
     { func; }
 
-    const char * privcolor(int priv)
-    {
-        switch (priv)
-        {
-            case PRIV_MASTER:
-                return "\f0";
-            case PRIV_AUTH:
-                return "\f1";
-            case PRIV_ADMIN:
-                return "\f6";
-            case PRIV_OWNER:
-                return "\f3";
-            case PRIV_NONE:
-            default:
-                return "\f7";
-        }
-    }
-
     int parsecommand (const char * text, clientinfo * ci)
     {
         if(!text || !*text)
@@ -3596,8 +3679,8 @@ namespace server
     }
 
     servcmd(info, {
-        sendmsg(ci, "\fs\f6info: \frrunning SM-Server Cube 2: Sauerbraten server modification.");
-        sendmsgf(ci, "\fs\f6info: \frrunning on a%s %s machine.", 
+        sendmsg(ci, "\fs\f0[INFO]\fr: running SM-Server Cube 2: Sauerbraten server modification.");
+        sendmsgf(ci, "\fs\f0[INFO]\fr: running on a%s %s machine.", 
             sizeof(void*) == 8 ? " x86_64" : "n i686",
 #ifdef _WIN32
                 "Windows"
@@ -3662,7 +3745,7 @@ namespace server
         defformatstring(hmsg)(" \fs\f0%i\fr hour%s,", Hours, Hours != 1 ? "s" : "");
         defformatstring(Mmsg)(" \fs\f0%i\fr minute%s and", Minutes, Minutes != 1 ? "s" : "");
         defformatstring(smsg)(" \fs\f0%i\fr second%s.", Seconds, Seconds != 1 ? "s" : "");
-        sendmsgf (ci, "\fs\f6info: \frthis server has been up for%s%s%s%s%s%s",
+        sendmsgf (ci, "\fs\f0[INFO]\fr: this server has been up for%s%s%s%s%s%s",
             (totalsecs >= (60 * 60 * 24 * 30 * 12)) ? ymsg : "",
             (totalsecs >= (60 * 60 * 24 * 30)) ? mmsg : "",
             (totalsecs >= (60 * 60 * 24)) ? dmsg : "",
@@ -3670,6 +3753,20 @@ namespace server
             (totalsecs >= (60)) ? Mmsg : "",
             (totalsecs >= (1)) ? smsg : ""
         );
+    })
+
+    servcmd(flagrun, {
+        if(!m_ctf) { sendmsg(ci, "\f0[FLAGRUN]\f7: This is \f3no \f2CTF \f7gamemode."); return; }
+        loopv(frs) if(!strcmp(frs[i].map, smapname) && frs[i].mode == gamemode)
+        {
+            double frseconds = (double)frs[i].scoremillis/1000.0;
+            sendmsgf(ci, "\f0[FLAGRUN]\f7: \f3Best \f2flagrun \f7on this \f2map \f1and \f6mode\f7: \f1%s, \f0%.3f \f6seconds\f7.",
+                frs[i].scorer,
+                frseconds
+            );
+            return;
+        }
+        sendmsg(ci, "\f0[FLAGRUN]\f7: There is \f2currently \f3no \f7best \f2flagrun \f7on this \f2map \f1and \f6mode\f7.");
     })
 
     servcmd(pm, {
@@ -3685,11 +3782,12 @@ namespace server
                 clientinfo * cx = getinfo(cn);
                 if(!cx)
                 {
-                    sendmsgf(ci, "Unknown client number: %i", cn);
+                    sendmsgf(ci, "\f0[PM]\f7: \f3Unknown \f2client \f1number\f7: \f0%i", cn);
                 }
                 else
                 {
-                    sendmsgf(cx, "You recived a private message from \fs\f0%s\fr: %s", colorname(ci), array[1]);
+                    sendmsgf(cx, "\f0[PM]\f7: \f1%s \f7has sent you the \f0following \f6private \f2message\f7: \f1%s\f7.", colorname(ci), array[1]);
+                    sendmsgf(ci, "\f0[PM]\f7: \f1Your \f6private \f2message \f7has been \f0succsessfully \f7delivered to \f1%s\f7.", colorname(cx));
                 }
             }
         }
@@ -3706,7 +3804,7 @@ namespace server
         string bak;
         if(!array[0])
         {
-            formatstring(message)("current game statistics for %s: %i frags, %i deaths (kpd: %.3f), accuracy: %.3f%%",
+            formatstring(message)("\f0[STATS]\f7: Current \f2game \f6statistics \f7for \f1%s\f7: \f4%i \f6frags \f7- \f4%i \f2deaths \f0(kpd: \f4%.3f) \f7/ \f3accuracy: \f4%.3f%%",
                 colorname(ci),
                 ci->state.frags,
                 ci->state.deaths,
@@ -3716,12 +3814,17 @@ namespace server
             if(m_teammode)
             {
                 copystring(bak, message);
-                formatstring(message)("%s, %i teamkills", bak, ci->state.teamkills);
+                formatstring(message)("%s \f7/ \f4%i \f5teamkills", bak, ci->state.teamkills);
             }
             if(m_ctf || m_collect)
             {
                 copystring(bak, message);
-                formatstring(message)("%s, scored: %i", bak, ci->state.flags);
+                formatstring(message)("%s \f7/ \f2%s \f1scored: \f4%i", bak, (m_ctf && !m_collect) ? "flags" : "skulls", ci->state.flags);
+                if(!m_collect)
+                {
+                    copystring(bak, message);
+                    formatstring(message)("%s \f7/ \f2flags \f0stolen: \f4%i \f7/ \f2flags \f5returned: \f4%i", bak, ci->state.stolen, ci->state.returned);
+                }
             }
             sendmsg(ci, message);
             return;
@@ -3733,7 +3836,7 @@ namespace server
             int cn = atoi(cns[i]);
             clientinfo *cx = getinfo(cn);
             if(!cx) { sendmsgf(ci, "Unknown client number: %i", cn); continue; }
-            formatstring(message)("current game statistics for %s: %i frags, %i deaths (kpd: %.3f), accuracy: %.3f%%",
+            formatstring(message)("\f0[STATS]\f7: Current \f2game \f6statistics \f7for \f1%s\f7: \f4%i \f6frags \f7- \f4%i \f2deaths \f0(kpd: \f4%.3f) \f7/ \f3accuracy: \f4%.3f%%",
                 colorname(cx),
                 cx->state.frags,
                 cx->state.deaths,
@@ -3743,12 +3846,17 @@ namespace server
             if(m_teammode)
             {
                 copystring(bak, message);
-                formatstring(message)("%s, %i teamkills", bak, cx->state.teamkills);
+                formatstring(message)("%s \f7/ \f4%i \f5teamkills", bak, cx->state.teamkills);
             }
             if(m_ctf || m_collect)
             {
                 copystring(bak, message);
-                formatstring(message)("%s, scored: %i", bak, cx->state.flags);
+                formatstring(message)("%s \f7/ \f2%s \f1scored: \f4%i", bak, (m_ctf && !m_collect) ? "flags" : "skulls", cx->state.flags);
+                if(!m_collect)
+                {
+                    copystring(bak, message);
+                    formatstring(message)("%s \f7/ \f2flags \f0stolen: \f4%i \f7/ \f2flags \f5returned: \f4%i", bak, cx->state.stolen, cx->state.returned);
+                }
             }
             sendmsg(ci, message);
         }
@@ -3830,13 +3938,27 @@ namespace server
         explodeString(Array[0], cns, ',', 128);
         for(int i = 0; cns[i]; i++)
         {
-            int cn = atoi (cns[i]);
-            clientinfo * cx = getinfo(cn);
+            int cn = atoi(cns[i]);
+            if(cn == -1)
+            {
+                loopvj(clients)
+                {
+                    clientinfo *cx = clients[j];
+                    if(!cx) continue;
+                    if(!mapdata || cx->getmap) return;
+                    sendservmsgf("\f0[INFO]\f7: Delivering the \f1map\f7 to \f2%s\f7.", colorname(cx));
+                    if((cx->getmap = sendfile(cx->clientnum, 2, mapdata, "ri", N_SENDMAP)))
+                        cx->getmap->freeCallback = freegetmap;
+                    cx->needclipboard = totalmillis ? totalmillis : 1;
+                }
+                continue;
+            }
+            clientinfo *cx = getinfo(cn);
             if(!cx) sendmsgf(ci, "Unknown client number: %i", cn);
             else
             {
                 if(!mapdata || cx->getmap) return;
-                sendservmsgf("Delivering the map to %s", colorname(cx));
+                sendservmsgf("\f0[INFO]\f7: Delivering the \f1map\f7 to \f2%s\f7.", colorname(cx));
                 if((cx->getmap = sendfile(cx->clientnum, 2, mapdata, "ri", N_SENDMAP)))
                     cx->getmap->freeCallback = freegetmap;
                 cx->needclipboard = totalmillis ? totalmillis : 1;
@@ -3848,17 +3970,28 @@ namespace server
     {
         packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
         if(!ci) return;
-        defformatstring(msg)("%s %s %s%s",
+        defformatstring(msg)("\f1%s \f7%s %s%s%s",
             colorname(ci),
             priv == PRIV_NONE ? "relinquished" : "claimed",
-            hidepriv && priv > PRIV_AUTH ? "\fs\f1invisible \fr" : "",
+            hidepriv && priv > PRIV_AUTH ? "\f4invisible " : "",
+            priv == PRIV_NONE ? privcolor(ci->privilege) : privcolor(priv),
             privname(priv == PRIV_NONE ? ci->privilege : priv)
         );
-        sendmsg(ci, msg);
+        if(hidepriv)
+        {
+            sendmsg(ci, msg);
+            loopv(clients) if(clients[i]->privilege >= priv) sendmsg(clients[i], msg);
+        }
+        else
+        {
+            putint(p, N_SERVMSG);
+            sendstring(msg, p);
+        }
         putint(p, N_CURRENTMASTER);
         putint(p, mastermode);
-        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && (clients[i]->privilege <= PRIV_AUTH || !hidepriv) && !clients[i]->isspy)
+        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->isspy)
         {
+            if(clients[i]->privilege > PRIV_AUTH && !hidepriv) continue;
             putint(p, clients[i]->clientnum);
             putint(p, clients[i]->privilege);
         }
@@ -3867,6 +4000,16 @@ namespace server
         ci->privilege = priv;
         if(hidepriv)
         {
+            packetbuf z(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+            putint(z, N_CURRENTMASTER);
+            putint(z, mastermode);
+            loopvj(clients) if(clients[j]->privilege == PRIV_MASTER || clients[j]->privilege == PRIV_AUTH)
+            {
+                putint(z, clients[j]->clientnum);
+                putint(z, clients[j]->privilege);
+            }
+            putint(z, -1);
+            sendpacket(-1, 1, z.finalize());
             loopvj(clients) if(clients[j]->privilege >= PRIV_MASTER)
             {
                 clientinfo *cx = clients[j];
@@ -3895,9 +4038,10 @@ namespace server
         {
             int cn = atoi(cns[i]);
             clientinfo *cx = getinfo(cn);
-            if(!cx) { sendmsgf(ci, "Unknown client number: %i", cn); continue; }
-            if(cx->privilege >= ci->privilege && cx->clientnum != ci->clientnum) { sendmsg(ci, "Permission denied."); continue; }
+            if(!cx) { sendmsgf(ci, "\f0[GIVEMASTER]\f7: \f3Unknown \f7client \f1number\f7: \f0%i", cn); continue; }
+            if(cx->privilege >= ci->privilege && cx->clientnum != ci->clientnum) { sendmsg(ci, "\f0[GIVEADMIN]\f7: Permission \f3denied\f7."); continue; }
             givepriv(cx, PRIV_MASTER);
+            sendmsgf(cx, "\f0[GIVEMASTER]\f7: \f1%s \f7has given you \f0master \f7privileges.", colorname(ci));
         }
     })
 
@@ -3923,6 +4067,32 @@ namespace server
         }
         else persistbots = revbool(persistbots);
         sendservmsgf("Bots persisting has been %sabled.", persistbots ? "en" : "dis");
+    })
+
+    servcmd(rename, {
+        char *array[3];
+        explodeString(args, array, ' ', 3);
+        if(!array[0] || !array[1]) { sendmsg(ci, "usage: #rename <cn[,cn2[,...]]> <new name>"); return; }
+        char *cns[128];
+        explodeString(array[0], cns, ',', 128);
+        for(int i = 0; cns[i]; i++)
+        {
+            clientinfo *cx = getinfo(atoi(cns[i]));
+            if(!cx) { sendmsgf(ci, "\f0[RENAME]\f7: \f3Unknown \f2client \f1number\f7: \f0%i", atoi(cns[i])); continue; }
+            if(cx != ci && cx->privilege >= ci->privilege) { sendmsg(ci, "\f0[RENAME]\f7: Permission \f3denied\f7."); continue; }
+            copystring(cx->name, (const char*)array[1]);
+            uchar buf[MAXSTRLEN];
+            ucharbuf b(buf, MAXSTRLEN);
+            putint(b, N_SWITCHNAME);
+            sendstring(cx->name, b);
+            packetbuf p(MAXSTRLEN, ENET_PACKET_FLAG_RELIABLE);
+            putint(p, N_CLIENT);
+            putint(p, cx->clientnum);
+            putint(p, b.len);
+            p.put(buf, b.len);
+            sendpacket(-1, 1, p.finalize());
+            sendmsgf(cx, "\f0[RENAME]\f7: \f1You \f7have been \f2renamed \f7to \f1%s\f7.", array[1]);
+        }
     })
 
     servcmd(ban, {
@@ -3977,6 +4147,18 @@ namespace server
         sendservmsgf("Name switch mute has been %sabled for all spectators.", snmute?"en":"dis");
     })
 
+    servcmd(autosendto, {
+        char*array[2];
+        explodeString(args, array, ' ', 2);
+        if(!array[0]) autosendto = autosendto==1?0:1;
+        else
+        {
+            int a = atoi(array[0]);
+            autosendto = a==0?0:1;
+        }
+        sendservmsgf("Automatically sendto on sendmap has been %sabled.", autosendto?"en":"dis");
+    })
+
     servcmd(getip, {
         char*array[2];
         explodeString(args, array, ' ', 2);
@@ -4017,6 +4199,11 @@ namespace server
         aiman::addclient(cx);
         if(cx->clientmap[0] || cx->mapcrc) checkmaps();
         sendf(-1, 1, "ri3", N_SPECTATOR, cn, 0);        
+    })
+
+    servcmd(intermission, {
+        startintermission();
+        sendservmsgf("\f0[INFO]\f7: \f1%s \f7has \f3forced \f7the intermission.", colorname(ci));
     })
 
     servcmd(pban, {
@@ -4063,9 +4250,10 @@ namespace server
         {
             int cn = atoi(cns[i]);
             clientinfo *cx = getinfo(cn);
-            if(!cx) { sendmsgf(ci, "Unknown client number: %i", cn); continue; }
-            if(cx->privilege >= ci->privilege && cx->clientnum != ci->clientnum) { sendmsg(ci, "Permission denied."); continue; }
+            if(!cx) { sendmsgf(ci, "\f0[GIVEADMIN]\f7: \f3Unknown \f7client \f1number\f7: \f0%i", cn); continue; }
+            if(cx->privilege >= ci->privilege && cx->clientnum != ci->clientnum) { sendmsg(ci, "\f0[GIVEADMIN]\f7: Permission \f3denied\f7."); continue; }
             givepriv(cx, PRIV_ADMIN);
+            sendmsgf(cx, "\f0[GIVEADMIN]\f7: \f1%s \f7has given you \f6admin \f7privileges.", colorname(ci));
         }
     })
 
@@ -4079,9 +4267,11 @@ namespace server
         {
             int cn = atoi(cns[i]);
             clientinfo *cx = getinfo(cn);
-            if(!cx) { sendmsgf(ci, "Unknown client number: %i", cn); continue; }
-            if(cx->privilege >= ci->privilege && cx->clientnum != ci->clientnum) { sendmsg(ci, "Permission denied."); continue; }
-            givepriv(cx, PRIV_NONE);
+            if(!cx) { sendmsgf(ci, "\f0[REVOKEPRIV]\f7: \f3Unknown \f7client \f1number\f7: \f0%i", cn); continue; }
+            if(cx->privilege >= ci->privilege && cx->clientnum != ci->clientnum) { sendmsg(ci, "\f0[REVOKEPRIV]\f7: Permission \f3denied\f7."); continue; }
+            int oldpriv = cx->privilege;
+            givepriv(cx, PRIV_ADMIN);
+            sendmsgf(cx, "\f0[REVOKEPRIV]\f7: \f1%s \f7has \f3revoken \f7your %s%s \f7privileges.", colorname(ci), privcolor(oldpriv), privname(oldpriv));
         }
     })
 
@@ -4217,11 +4407,14 @@ namespace server
     })
 
     servcmd(exec, {
-        execute(args);
+        char*array[1];
+        explodeString(args, array, ' ', 1);
+        if(!array[0]) { sendmsg(ci, "usage: #exec <cubescript code>"); return; }
+        execute(array[0]);
         loopv(clients)
         {
             clientinfo *cx = clients[i];
-            if(cx->privilege==PRIV_OWNER) sendmsgf(cx, "Cubescript code runned by %s: %s", colorname(ci), args);
+            if(cx->privilege==PRIV_OWNER) sendmsgf(cx, "\f0[EXEC]\f7: \f1%s \f7has runned the following \f2CubeScript \f6code\f7: \f3%s", colorname(ci), array[0]);
         }
     })
 
@@ -4249,7 +4442,7 @@ namespace server
                 sendmsg(ci, "Module succsessfully loaded.");
                 break;
         }
-        sendservmsgf("%s\f1\fs has loaded the \f0%s\fr module.", colorname(ci), array[0]);
+        sendservmsgf("\f0[MODULE]\f7: \f1%s \f7has \f0loaded \f7the \f6%s \f2module\f7.", colorname(ci), array[0]);
     })
 
     servcmd(unload, {
@@ -4268,7 +4461,7 @@ namespace server
                 sendmsg(ci, "Module succsessfully unloaded.");
                 break;
         }
-        sendservmsgf("%s\f1\fs has unloaded the \f0%s\fr module.", colorname(ci), array[0]);
+        sendservmsgf("\f0[MODULE]\f7: \f1%s \f7has \f3unloaded \f7the \f6%s \f2module\f7.", colorname(ci), array[0]);
     })
 
     servcmd(reload, {
@@ -4285,7 +4478,7 @@ namespace server
                 sendmsg(ci, "Module succsessfully reloaded.");
                 break;
         }
-        sendservmsgf("%s\f1\fs has reloaded the \f0%s\fr module.", colorname(ci), array[0]);
+        sendservmsgf("\f0[MODULE]\f7: \f1%s \f7has \f1reloaded \f7the \f6%s \f2module\f7.", colorname(ci), array[0]);
     })
 #endif
 
@@ -4308,7 +4501,7 @@ namespace server
         {
             ff->printf("// Automatically generated by SM-Server - do not edit.\n");
             ff->printf("// Contains a list of flagruns.\n");
-            loopv(frs) f->printf("flagrun %s %s %i %i", frs[i].scorer, frs[i].map, frs[i].scoremillis, frs[i].mode);
+            loopv(frs) f->printf("flagrun %s %s %i %i\n", frs[i].scorer, frs[i].map, frs[i].scoremillis, frs[i].mode);
             delete ff;
         }
     }
@@ -4320,6 +4513,8 @@ namespace server
         addman("help", "(command)", "displays a list of commands, or displays help about a given command.");
         addcmd("info", PRIV_NONE, servcmdname(info));
         addman("info", "", "displays information about the server mod and the server.");
+        addcmd("flagrun", PRIV_NONE, servcmdname(flagrun));
+        addman("flagrun", "", "displays the best flagrun on the current map and mode.");
         addcmd("pm", PRIV_NONE, servcmdname(pm));
         addman("pm", "<cn> <message>", "delivers a private message to a player.");
         addcmd("stats", PRIV_NONE, servcmdname(stats));
@@ -4341,6 +4536,8 @@ namespace server
         addman("persist", "[0/1]", "Enables teams persisting.");
         addcmd("persistb", PRIV_MASTER, servcmdname(persistb));
         addman("persistb", "[0/1]", "Enables bots persisting.");
+        addcmd("rename", PRIV_MASTER, servcmdname(rename));
+        addman("rename", "<cn[,cn2[,...]]>", "Renames one or multiple clients.");
         // Player commands that require auth privileges
         addcmd("ban", PRIV_AUTH, servcmdname(ban));
         addman("ban", "<cn> <time in minutes> [reason]", "kicks and bans a client with the specified ban duration.");
@@ -4350,12 +4547,16 @@ namespace server
         addman("listbans", "", "lists all banned clients.");
         addcmd("snmute", PRIV_AUTH, servcmdname(snmute));
         addman("snmute", "[0/1]", "toggles name mute for all spectators.");
+        addcmd("autosendto", PRIV_AUTH, servcmdname(autosendto));
+        addman("autosendto", "[0/1]", "toggles automaitcally sendto after sendmap.");
         addcmd("getip", PRIV_AUTH, servcmdname(getip));
         addman("getip", "<cn>", "displays a player's IP-Address.");
         addcmd("fspec", PRIV_AUTH, servcmdname(fspec));
         addman("fspec", "<cn>", "forces a client to spectate.");
         addcmd("funspec", PRIV_AUTH, servcmdname(funspec));
         addman("funspec", "<cn>", "removes a client's forcespectate.");
+        addcmd("intermission", PRIV_AUTH, servcmdname(intermission));
+        addman("intermission", "", "Starts the intermission.");
         // Player commands that require admin privileges
         addcmd("pban", PRIV_ADMIN, servcmdname(pban));
         addman("pban", "<cn> [reason]", "kicks and permamently bans a client.");
@@ -4424,6 +4625,17 @@ namespace server
                     {
                         if(!ispban(getclienthostname(ci->clientnum))) connected(ci);
                         else { disconnect_client(sender, DISC_IPBAN); return; }
+                    }
+                    if(m_edit && autosendto)
+                    {
+                        loopvj(clients)
+                        {
+                            if(!mapdata || ci->getmap) return;
+                            sendservmsgf("\f0[INFO]\f7: Automatically delivering the \f1map\f7 to \f2%s\f7.", colorname(ci));
+                            if((ci->getmap = sendfile(ci->clientnum, 2, mapdata, "ri", N_SENDMAP)))
+                                ci->getmap->freeCallback = freegetmap;
+                            ci->needclipboard = totalmillis ? totalmillis : 1;
+                        }
                     }
                     break;
                 }
