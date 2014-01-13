@@ -784,9 +784,12 @@ namespace server
         return false;
     }
 
+    VARF(defaultgamemode, 0, 0, NUMGAMEMODES+STARTGAMEMODE, { if(!m_mp(defaultgamemode)) defaultgamemode = 0; });
+
     void serverinit()
     {
         smapname[0] = '\0';
+        gamemode = defaultgamemode;
         resetitems();
     }
 
@@ -2421,6 +2424,8 @@ namespace server
         changemap(map, mode);
     }
 
+    VARP(forcegamemode, 0, 0, 2);
+
     void vote(const char *map, int reqmode, int sender)
     {
         clientinfo *ci = getinfo(sender);
@@ -2436,6 +2441,11 @@ namespace server
         if(lockmaprotation && !ci->local && ci->privilege < (lockmaprotation > 1 ? PRIV_ADMIN : PRIV_MASTER) && findmaprotation(reqmode, map) < 0) 
         {
             sendf(sender, 1, "ris", N_SERVMSG, "This server has locked the map rotation.");
+            return;
+        }
+        if(forcegamemode && reqmode != defaultgamemode && ci->privilege < (forcegamemode > 1 ? PRIV_ADMIN : PRIV_MASTER))
+        {
+            sendf(sender, 1, "ris", N_SERVMSG, "This server has locked the gamemode.");
             return;
         }
         copystring(ci->mapvote, map);
