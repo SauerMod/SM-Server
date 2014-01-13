@@ -784,11 +784,8 @@ namespace server
         return false;
     }
 
-    void initcmds();
-
     void serverinit()
     {
-        initcmds();
         smapname[0] = '\0';
         resetitems();
     }
@@ -1638,7 +1635,7 @@ namespace server
                     sendf(ci->clientnum, 1, "ris", N_SERVMSG, "Spectators may not claim master.");
                     return false;
                 }
-                loopv(clients) if(ci!=clients[i] && clients[i]->privilege)
+                loopv(clients) if(ci!=clients[i] && clients[i]->privilege && !clients[i]->isspy && (!hidepriv || clients[i]->privilege <= PRIV_AUTH))
                 {
                     sendf(ci->clientnum, 1, "ris", N_SERVMSG, "Master is already claimed.");
                     return false;
@@ -3181,13 +3178,15 @@ namespace server
         return 0;
     }
 
-    void addexternal(char *s, void *v)
+    bool addexternal(char *s, void *v)
     {
+        loopv(gfuncs) if(!strcmp(gfuncs[i]->n, s)) return false;
         gfunc *p = new gfunc;
-        if(!p) return;
+        if(!p) return false;
         gfuncs.add(p);
         strncpy(p->n, s, 64);
         p->f = v;
+        return true;
     }
 
     void setexternal(char *s, void *v)
@@ -3511,25 +3510,46 @@ namespace server
     };
     vector<command> commands;
 
-    void addcmd(const char * name, int privilege, void (*function)(const char *, clientinfo *))
+    struct manpage
+    {
+        string command;
+        string arguments;
+        string manpage;
+    };
+    vector<manpage> manpages;
+
+    bool addcmd(const char * name, int privilege, void (*function)(const char *, clientinfo *))
     {
         loopv(commands)
         {
             if(!strcmp(commands[i].name, name))
             {
-                return;
+                return false;
             }
         }
         int id = commands.length();
         commands.add();
-        copystring (commands[id].name, name);
+        copystring(commands[id].name, name);
         commands[id].priv = privilege;
         commands[id].func = function;
+        return true;
     }
 
+    bool addman(const char * command, const char * arguments, const char * manpage)
+    {
+        loopv(manpages)
+            if(!strcmp(manpages[i].command, command)) { return false; }
+        uint id = manpages.length();
+        manpages.add();
+        copystring(manpages[id].command, command);
+        copystring(manpages[id].arguments, arguments);
+        copystring(manpages[id].manpage, manpage);
+        return true;
+    }
+
+#define servcmdn(name, sname, privilege, mana, manp, function) template <int N> struct name; template <> struct name<__LINE__> { static bool initc; static bool initm; static void run (const char * args, clientinfo * ci); }; bool name<__LINE__>::initc = addcmd(sname, privilege, name<__LINE__>::run); bool name<__LINE__>::initm = addman(sname, mana, manp); void name<__LINE__>::run (const char * args, clientinfo * ci) { function; }
 #define servcmdname(name) __servcmd_##name
-#define servcmd(name, func) void __servcmd_##name (const char * args, clientinfo * ci) \
-    { func; }
+#define servcmd(name, privilege, mana, manp, function) servcmdn(servcmdname(name), #name, privilege, mana, manp, function)
 
     int parsecommand (const char * text, clientinfo * ci)
     {
@@ -3563,15 +3583,7 @@ namespace server
         return 0;
     }
 
-    struct manpage
-    {
-        string command;
-        string arguments;
-        string manpage;
-    };
-    vector<manpage> manpages;
-
-    servcmd(help, {
+    servcmd(help, PRIV_NONE, "(command)", "displays a list of commands, or displays help about a given command.", {
         char * array [2];
         explodeString (args, array, ' ', 2);
         if(array[0])
@@ -3666,19 +3678,7 @@ namespace server
         }
     })
 
-    int addman(const char * command, const char * arguments, const char * manpage)
-    {
-        loopv(manpages)
-            if(!strcmp(manpages[i].command, command)) { return 1; }
-        uint id = manpages.length();
-        manpages.add();
-        copystring(manpages[id].command, command);
-        copystring(manpages[id].arguments, arguments);
-        copystring(manpages[id].manpage, manpage);
-        return 0;
-    }
-
-    servcmd(info, {
+    servcmd(info, PRIV_NONE, "", "displays information about the server mod and the server.", {
         sendmsg(ci, "\fs\f0[INFO]\fr: running SM-Server Cube 2: Sauerbraten server modification.");
         sendmsgf(ci, "\fs\f0[INFO]\fr: running on a%s %s machine.", 
             sizeof(void*) == 8 ? " x86_64" : "n i686",
@@ -3755,7 +3755,7 @@ namespace server
         );
     })
 
-    servcmd(flagrun, {
+    servcmd(flagrun, PRIV_NONE, "", "displays the best flagrun on the current map and mode.", {
         if(!m_ctf) { sendmsg(ci, "\f0[FLAGRUN]\f7: This is \f3no \f2CTF \f7gamemode."); return; }
         loopv(frs) if(!strcmp(frs[i].map, smapname) && frs[i].mode == gamemode)
         {
@@ -3769,7 +3769,7 @@ namespace server
         sendmsg(ci, "\f0[FLAGRUN]\f7: There is \f2currently \f3no \f7best \f2flagrun \f7on this \f2map \f1and \f6mode\f7.");
     })
 
-    servcmd(pm, {
+    servcmd(pm, PRIV_NONE, "<cn> <message>", "delivers a private message to a player.", {
         char * array [2] = {};
         explodeString((char *) args, array, ' ', 2);
         if(array[0] && array[1])
@@ -3797,7 +3797,7 @@ namespace server
         }
     })
 
-    servcmd(stats, {
+    servcmd(stats, PRIV_NONE, "[cn[,cn2[,...]]]", "displays current game statistics for the specified player(s).", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         string message;
@@ -3834,8 +3834,40 @@ namespace server
         for(int i = 0; cns[i]; i++)
         {
             int cn = atoi(cns[i]);
+            if(cn == -1)
+            {
+                loopv(clients)
+                {
+                    clientinfo *cx = clients[i];
+                    if(!cx || cx->isspy) { continue; }
+                    formatstring(message)("\f0[STATS]\f7: Current \f2game \f6statistics \f7for \f1%s\f7: \f4%i \f6frags \f7- \f4%i \f2deaths \f0(kpd: \f4%.3f) \f7/ \f3accuracy: \f4%.3f%%",
+                        colorname(cx),
+                        cx->state.frags,
+                        cx->state.deaths,
+                        ((float)cx->state.frags/max(cx->state.deaths, 1)),
+                        (float)(cx->state.damage*100/max(cx->state.shotdamage, 1))
+                    );
+                    if(m_teammode)
+                    {
+                        copystring(bak, message);
+                        formatstring(message)("%s \f7/ \f4%i \f5teamkills", bak, cx->state.teamkills);
+                    }
+                    if(m_ctf || m_collect)
+                    {
+                        copystring(bak, message);
+                        formatstring(message)("%s \f7/ \f2%s \f1scored: \f4%i", bak, (m_ctf && !m_collect) ? "flags" : "skulls", cx->state.flags);
+                        if(!m_collect)
+                        {
+                            copystring(bak, message);
+                            formatstring(message)("%s \f7/ \f2flags \f0stolen: \f4%i \f7/ \f2flags \f5returned: \f4%i", bak, cx->state.stolen, cx->state.returned);
+                        }
+                    }
+                    sendmsg(ci, message);
+                }
+                break;
+            }
             clientinfo *cx = getinfo(cn);
-            if(!cx) { sendmsgf(ci, "Unknown client number: %i", cn); continue; }
+            if(!cx || cx->isspy) { sendmsgf(ci, "Unknown client number: %i", cn); continue; }
             formatstring(message)("\f0[STATS]\f7: Current \f2game \f6statistics \f7for \f1%s\f7: \f4%i \f6frags \f7- \f4%i \f2deaths \f0(kpd: \f4%.3f) \f7/ \f3accuracy: \f4%.3f%%",
                 colorname(cx),
                 cx->state.frags,
@@ -3865,7 +3897,7 @@ namespace server
     inline bool revbool(bool a)
         { return !a; }
 
-    servcmd(mute, {
+    servcmd(mute, PRIV_MASTER, "<cn> [0/1]", "toggles text-message mute for a client.", {
         char*array[3];
         explodeString(args, array, ' ', 3);
         if(!array[0]) { sendmsg(ci, "Usage: #mute <cn> [0/1]"); return; }
@@ -3882,7 +3914,7 @@ namespace server
         sendmsgf(cx, "you have been %smuted.", cx->mute?"":"un");
     })
 
-    servcmd(emute, {
+    servcmd(emute, PRIV_MASTER, "<cn> [0/1]", "toggles edit mute for a client.", {
         char*array[3];
         explodeString(args, array, ' ', 3);
         if(!array[0]) { sendmsg(ci, "Usage: #emute <cn> [0/1]"); return; }
@@ -3899,7 +3931,7 @@ namespace server
         sendmsgf(cx, "you have been edit-%smuted.", cx->emute?"":"un");
     })
 
-    servcmd(nmute, {
+    servcmd(nmute, PRIV_MASTER, "<cn> [0/1]", "toggles name mute for a client.", {
         char*array[3];
         explodeString(args, array, ' ', 3);
         if(!array[0]) { sendmsg(ci, "Usage: #nmute <cn> [0/1]"); return; }
@@ -3918,7 +3950,7 @@ namespace server
 
     bool smute = false;
 
-    servcmd(smute, {
+    servcmd(smute, PRIV_MASTER, "[0/1]", "toggles text-message mute for all spectators.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(!array[0]) smute = revbool(smute);
@@ -3930,7 +3962,7 @@ namespace server
         sendservmsgf("Text-message mute has been %sabled for all spectators.", smute?"en":"dis");
     })
 
-    servcmd(sendto, {
+    servcmd(sendto, PRIV_MASTER, "<cn[,cn2[,...]]>", "forces a client to getmap.", {
         char * Array[2];
         explodeString(args, Array, ' ', 2);
         if(!Array[0]) { sendmsg(ci, "usage: #sendto <cn[,cn2[,...]]>"); return; }
@@ -3964,6 +3996,11 @@ namespace server
                 cx->needclipboard = totalmillis ? totalmillis : 1;
             }
         }
+    })
+
+    servcmd(wall, PRIV_MASTER, "<message>", "Sends an anonymous message", {
+        if(!args || !*args) { sendmsg(ci, "usage: #wall <message>"); return; }
+        sendservmsgf(args);
     })
 
     void givepriv(clientinfo *ci, int priv)
@@ -4028,7 +4065,7 @@ namespace server
         checkpausegame();
     }
 
-    servcmd(givemaster, {
+    servcmd(givemaster, PRIV_MASTER, "<cn[,cn2[,...]]>", "gives master privileges to a client.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(!array[0]) { sendmsg(ci, "usage: #givemaster <cn[,cn2[,...]]>"); return; }
@@ -4045,7 +4082,7 @@ namespace server
         }
     })
 
-    servcmd(persist, {
+    servcmd(persist, PRIV_MASTER, "[0/1]", "Enables teams persisting.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(array[0])
@@ -4057,7 +4094,7 @@ namespace server
         sendservmsgf("Team persisting has been %sabled.", persistteams ? "en" : "dis");
     })
 
-    servcmd(persistb, {
+    servcmd(persistb, PRIV_AUTH, "[0/1]", "Enables bots persisting.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(array[0])
@@ -4069,7 +4106,7 @@ namespace server
         sendservmsgf("Bots persisting has been %sabled.", persistbots ? "en" : "dis");
     })
 
-    servcmd(rename, {
+    servcmd(rename, PRIV_AUTH, "<cn[,cn2[,...]]>", "Renames one or multiple clients.", {
         char *array[3];
         explodeString(args, array, ' ', 3);
         if(!array[0] || !array[1]) { sendmsg(ci, "usage: #rename <cn[,cn2[,...]]> <new name>"); return; }
@@ -4096,7 +4133,7 @@ namespace server
         }
     })
 
-    servcmd(ban, {
+    servcmd(ban, PRIV_AUTH, "<cn> <time in minutes> [reason]", "kicks and bans a client with the specified ban duration.", {
         char *array[3];
         explodeString(args, array, ' ', 3);
         if(!array[0]||!array[1]) { sendmsg(ci, "usage: #ban <cn> <time in minutes> [reason]"); return; }
@@ -4114,7 +4151,7 @@ namespace server
         disconnect_client(cn, DISC_IPBAN);
     })
 
-    servcmd(unban, {
+    servcmd(unban, PRIV_AUTH, "<id>", "unbans a banned client.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(!array[0]) { sendmsg(ci, "usage: #unban <id>. You can find the ids of the banned clients with #listbans."); return; }
@@ -4123,7 +4160,7 @@ namespace server
         sendmsgf(ci, "The ban with the ID %i has been succsessfully unbanned.", j);
     })
 
-    servcmd(listbans, {
+    servcmd(listbans, PRIV_AUTH, "", "lists all banned clients.", {
         loopv(bannedips)
         {
             sendmsgf(ci, "ID %i, IP-Address: %i.%i.%i.%i, Expires: %i minutes", 
@@ -4136,7 +4173,7 @@ namespace server
 
     bool snmute = false;
 
-    servcmd(snmute, {
+    servcmd(snmute, PRIV_AUTH, "[0/1]", "toggles name mute for all spectators.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(!array[0]) snmute = revbool(snmute);
@@ -4148,7 +4185,7 @@ namespace server
         sendservmsgf("Name switch mute has been %sabled for all spectators.", snmute?"en":"dis");
     })
 
-    servcmd(autosendto, {
+    servcmd(autosendto, PRIV_AUTH, "[0/1]", "toggles automaitcally sendto after sendmap.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(!array[0]) autosendto = autosendto==1?0:1;
@@ -4160,7 +4197,7 @@ namespace server
         sendservmsgf("Automatically sendto on sendmap has been %sabled.", autosendto?"en":"dis");
     })
 
-    servcmd(getip, {
+    servcmd(getip, PRIV_AUTH, "<cn>", "displays a player's IP-Address.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(!array[0]) { sendmsg(ci, "usage: #getip <cn>"); return; }
@@ -4170,7 +4207,7 @@ namespace server
         sendmsgf(ci, "%s's IP-Address: %s", colorname(cx), getclienthostname(cn));
     })
 
-    servcmd(fspec, {
+    servcmd(fspec, PRIV_AUTH, "<cn>", "forces a client to spectate.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(!array[0]) { sendmsg(ci, "usage: #fspec <cn>"); return; }
@@ -4186,7 +4223,7 @@ namespace server
         sendf(-1, 1, "ri3", N_SPECTATOR, cn, 1);
     })
 
-    servcmd(funspec, {
+    servcmd(funspec, PRIV_AUTH, "<cn>", "removes a client's forcespectate.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(!array[0]) { sendmsg(ci, "usage: #fspec <cn>"); return; }
@@ -4202,12 +4239,12 @@ namespace server
         sendf(-1, 1, "ri3", N_SPECTATOR, cn, 0);        
     })
 
-    servcmd(intermission, {
+    servcmd(intermission, PRIV_AUTH, "", "Starts the intermission.", {
         startintermission();
         sendservmsgf("\f0[INFO]\f7: \f1%s \f7has \f3forced \f7the intermission.", colorname(ci));
     })
 
-    servcmd(pban, {
+    servcmd(pban, PRIV_ADMIN, "<cn> [reason]", "kicks and permamently bans a client.", {
         char * Array[2];
         explodeString(args, Array, ' ', 2);
         if(!Array[0]) { sendmsg(ci, "usage: #pban <cn> [reason]"); return; }
@@ -4223,7 +4260,7 @@ namespace server
         }
     })
 
-    servcmd(unpban, {
+    servcmd(unpban, PRIV_ADMIN, "<id>", "unbans a permamenlty banned client.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(!array[0]) { sendmsg(ci, "usage: #unpban <id>. You can find the ids of the pbanned clients with #listpbans."); return; }
@@ -4232,7 +4269,7 @@ namespace server
         sendmsgf(ci, "The PBan with the ID %i has been succsessfully unbanned.", j);
     })
 
-    servcmd(listpbans, {
+    servcmd(listpbans, PRIV_ADMIN, "", "lists all permemently banned clients.", {
         loopv(pbans)
             sendmsgf(ci, "ID %i, IP-Address: %s, Reason: %s", 
                 i+1,
@@ -4241,7 +4278,7 @@ namespace server
             );
     })
 
-    servcmd(giveadmin, {
+    servcmd(giveadmin, PRIV_ADMIN, "<cn[,cn2[,...]]>", "gives admin privileges to a client.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(!array[0]) { sendmsg(ci, "usage: #giveadmin <cn[,cn2[,...]]>"); return; }
@@ -4258,7 +4295,7 @@ namespace server
         }
     })
 
-    servcmd(revokepriv, {
+    servcmd(revokepriv, PRIV_ADMIN, "<cn[,cn2[,...]]>", "revokes a client's privileges.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(!array[0]) { sendmsg(ci, "usage: #revokepriv <cn[,cn2[,...]]>"); return; }
@@ -4276,7 +4313,7 @@ namespace server
         }
     })
 
-    servcmd(spy, {
+    servcmd(spy, PRIV_ADMIN, "[0/1]", "Toggles spy mode.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         bool newvalue;
@@ -4403,11 +4440,11 @@ namespace server
         ci->isspy = newvalue;
     })
 
-    servcmd(halt, {
+    servcmd(halt, PRIV_OWNER, "", "Closes the server.", {
         quit = true;
     })
 
-    servcmd(exec, {
+    servcmd(exec, PRIV_OWNER, "<Cubescript code>", "Runs a cubescript code.", {
         char*array[1];
         explodeString(args, array, ' ', 1);
         if(!array[0]) { sendmsg(ci, "usage: #exec <cubescript code>"); return; }
@@ -4420,7 +4457,7 @@ namespace server
     })
 
 #ifndef WIN32
-    servcmd(load, {
+    servcmd(load, PRIV_OWNER, "<module>", "loads a module.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(!array[0]) { sendmsg(ci, "usage: #load <module>"); return; }
@@ -4446,7 +4483,7 @@ namespace server
         sendservmsgf("\f0[MODULE]\f7: \f1%s \f7has \f0loaded \f7the \f6%s \f2module\f7.", colorname(ci), array[0]);
     })
 
-    servcmd(unload, {
+    servcmd(unload, PRIV_OWNER, "<module>", "unloads a module.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(!array[0]) { sendmsg(ci, "usage: #unload <module>"); return; }
@@ -4465,7 +4502,7 @@ namespace server
         sendservmsgf("\f0[MODULE]\f7: \f1%s \f7has \f3unloaded \f7the \f6%s \f2module\f7.", colorname(ci), array[0]);
     })
 
-    servcmd(reload, {
+    servcmd(reload, PRIV_OWNER, "<module>", "reloads a module.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(!array[0]) { sendmsg(ci, "usage: #reload <module>"); return; }
@@ -4507,86 +4544,10 @@ namespace server
         }
     }
 
-    void initcmds() // Also initializes "global" functions, these are the functions that are shared with modules.
-    {
-        // Player commands that require no privileges
-        addcmd("help", PRIV_NONE, servcmdname(help));
-        addman("help", "(command)", "displays a list of commands, or displays help about a given command.");
-        addcmd("info", PRIV_NONE, servcmdname(info));
-        addman("info", "", "displays information about the server mod and the server.");
-        addcmd("flagrun", PRIV_NONE, servcmdname(flagrun));
-        addman("flagrun", "", "displays the best flagrun on the current map and mode.");
-        addcmd("pm", PRIV_NONE, servcmdname(pm));
-        addman("pm", "<cn> <message>", "delivers a private message to a player.");
-        addcmd("stats", PRIV_NONE, servcmdname(stats));
-        addman("stats", "[cn[,cn2[,...]]]", "displays current game statistics for the specified player(s).");
-        // Player commands that require master privileges
-        addcmd("mute", PRIV_MASTER, servcmdname(mute));
-        addman("mute", "<cn> [0/1]", "toggles text-message mute for a client.");
-        addcmd("emute", PRIV_MASTER, servcmdname(emute));
-        addman("emute", "<cn> [0/1]", "toggles edit mute for a client.");
-        addcmd("nmute", PRIV_MASTER, servcmdname(nmute));
-        addman("nmute", "<cn> [0/1]", "toggles name mute for a client.");
-        addcmd("smute", PRIV_MASTER, servcmdname(smute));
-        addman("smute", "[0/1]", "toggles text-message mute for all spectators.");
-        addcmd("sendto", PRIV_MASTER, servcmdname(sendto));
-        addman("sendto", "<cn[,cn2[,...]]>", "forces a client to getmap.");
-        addcmd("givemaster", PRIV_MASTER, servcmdname(givemaster));
-        addman("givemaster", "<cn[,cn2[,...]]>", "gives master privileges to a client.");
-        addcmd("persist", PRIV_MASTER, servcmdname(persist));
-        addman("persist", "[0/1]", "Enables teams persisting.");
-        addcmd("persistb", PRIV_MASTER, servcmdname(persistb));
-        addman("persistb", "[0/1]", "Enables bots persisting.");
-        addcmd("rename", PRIV_MASTER, servcmdname(rename));
-        addman("rename", "<cn[,cn2[,...]]>", "Renames one or multiple clients.");
-        // Player commands that require auth privileges
-        addcmd("ban", PRIV_AUTH, servcmdname(ban));
-        addman("ban", "<cn> <time in minutes> [reason]", "kicks and bans a client with the specified ban duration.");
-        addcmd("unban", PRIV_AUTH, servcmdname(unban));
-        addman("unban", "<id>", "unbans a banned client.");
-        addcmd("listbans", PRIV_AUTH, servcmdname(listbans));
-        addman("listbans", "", "lists all banned clients.");
-        addcmd("snmute", PRIV_AUTH, servcmdname(snmute));
-        addman("snmute", "[0/1]", "toggles name mute for all spectators.");
-        addcmd("autosendto", PRIV_AUTH, servcmdname(autosendto));
-        addman("autosendto", "[0/1]", "toggles automaitcally sendto after sendmap.");
-        addcmd("getip", PRIV_AUTH, servcmdname(getip));
-        addman("getip", "<cn>", "displays a player's IP-Address.");
-        addcmd("fspec", PRIV_AUTH, servcmdname(fspec));
-        addman("fspec", "<cn>", "forces a client to spectate.");
-        addcmd("funspec", PRIV_AUTH, servcmdname(funspec));
-        addman("funspec", "<cn>", "removes a client's forcespectate.");
-        addcmd("intermission", PRIV_AUTH, servcmdname(intermission));
-        addman("intermission", "", "Starts the intermission.");
-        // Player commands that require admin privileges
-        addcmd("pban", PRIV_ADMIN, servcmdname(pban));
-        addman("pban", "<cn> [reason]", "kicks and permamently bans a client.");
-        addcmd("unpban", PRIV_ADMIN, servcmdname(unpban));
-        addman("unpban", "<id>", "unbans a permamenlty banned client.");
-        addcmd("listpbans", PRIV_ADMIN, servcmdname(listpbans));
-        addman("listpbans", "", "lists all permemently banned clients.");
-        addcmd("giveadmin", PRIV_ADMIN, servcmdname(giveadmin));
-        addman("giveadmin", "<cn[,cn2[,...]]>", "gives admin privileges to a client.");
-        addcmd("revokepriv", PRIV_ADMIN, servcmdname(revokepriv));
-        addman("revokepriv", "<cn[,cn2[,...]]>", "revokes a client's privileges.");
-        addcmd("spy", PRIV_ADMIN, servcmdname(spy));
-        addman("spy", "[0/1]", "Toggles spy mode.");
-        // Player commands that require owner privileges
-        addcmd("halt", PRIV_OWNER, servcmdname(halt));
-        addman("halt", "", "Closes the server.");
-        addcmd("exec", PRIV_OWNER, servcmdname(exec));
-        addman("exec", "<Cubescript code>", "Runs a cubescript code.");
-#ifndef WIN32
-        addcmd("load", PRIV_OWNER, servcmdname(load));
-        addman("load", "<module>", "loads a module.");
-        addcmd("unload", PRIV_OWNER, servcmdname(unload));
-        addman("unload", "<module>", "unloads a module.");
-        addcmd("reload", PRIV_OWNER, servcmdname(reload));
-        addman("reload", "<module>", "reloads a module.");
-        // Functions, which are shared with modules
-        addexternal((char*)"sendservmsgf", (void*)sendservmsgf);
-#endif
-    }
+#define addextn(name, sname, function) template <int N> struct sname; template <> struct sname<__LINE__> { static bool init; }; bool sname<__LINE__>::init = addexternal((char*)#name, (void*)function);
+#define addext(name, function) addextn(name, __gfunc_##name, function)
+
+    addext(sendservmsgf, sendservmsgf)
 
     void parsepacket(int sender, int chan, packetbuf &p)     // has to parse exactly each byte of the packet
     {
@@ -4928,12 +4889,12 @@ namespace server
 //                QUEUE_AI;
 //                QUEUE_MSG;
                 getstring(text, p);
-                filtertext(text, text);
                 if(text[0] == '#')
                 {
                     parsecommand (&text[1], cq);
                     return;
                 }
+                filtertext(text, text);
                 if(cq->mute) return;
                 if(cq->isspy)
                 {
@@ -5496,4 +5457,3 @@ namespace server
 
     #include "aiman.h"
 }
-

@@ -1,5 +1,11 @@
 Changelog
 =========
+0.2.4:
+	* A lot of changes to the servcmd system.
+	* Fixed some spy and hiddenpriv stuff.
+	* Added a #wall command.
+	* Added #stats -1 (Displays stats for all players.)
+	* #stats won't display spyers (also #stats -1 won't).
 0.2.3:
 	* Minimal rename changes.
 	* Some other minimal changes.
