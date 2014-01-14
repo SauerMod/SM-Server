@@ -1,5 +1,10 @@
 Changelog
 =========
+0.2.7:
+	* Fixed some invpriv stuff.
+	* Added admins (or higher) only chat (#achat).
+	* Fixed #revokepriv.
+	* Fixed some givepriv stuff.
 0.2.6:
 	* Removed #snmute ('Cause that command made no sense).
 	* Changed some required privilege levels for some player commands.

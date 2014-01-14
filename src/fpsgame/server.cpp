@@ -1623,6 +1623,7 @@ namespace server
     {
         if(authname && !val) return false;
         const char *name = "";
+        int oldpriv = ci->privilege;
         if(val)
         {
             bool haspass = adminpass[0] && checkpassword(ci, adminpass, pass);
@@ -1693,15 +1694,15 @@ namespace server
         else formatstring(msg)("\f1%s \f7%s %s%s%s",
             colorname(ci),
             val ? "claimed" : "relinquished",
+            ((val && ci->privilege > PRIV_AUTH) || oldpriv > PRIV_AUTH) && hidepriv ? "\f4invisible " : "",
             privcolor(name),
-            val > PRIV_AUTH && hidepriv ? "\f4invisible " : "",
             name
         );
         packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
         if(hidepriv && needshide)
         {
             sendmsg(ci, msg);
-            loopv(clients) if(clients[i]->privilege >= ci->privilege && clients[i] != ci) sendmsg(clients[i], msg);
+            loopv(clients) if(((val && clients[i]->privilege >= ci->privilege) || (!val && clients[i]->privilege >= PRIV_ADMIN)) && clients[i] != ci) sendmsg(clients[i], msg);
         }
         else
         {
@@ -1712,7 +1713,7 @@ namespace server
         putint(p, mastermode);
         loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->isspy)
         {
-            if((clients[i]->privilege > PRIV_AUTH && !hidepriv) || (clients[i]->clientnum == ci->clientnum && needshide)) continue;
+            if((clients[i]->privilege > PRIV_AUTH && !hidepriv) || clients[i]->clientnum == ci->clientnum) continue;
             putint(p, clients[i]->clientnum);
             putint(p, clients[i]->privilege);
         }
@@ -1745,6 +1746,19 @@ namespace server
                 sendpacket(cx->clientnum, 1, q.finalize());
             }
         }
+        else
+        {
+            packetbuf z(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+            putint(z, N_CURRENTMASTER);
+            putint(z, mastermode);
+            loopvj(clients) if(clients[j]->privilege >= PRIV_MASTER)
+            {
+                putint(z, clients[j]->clientnum);
+                putint(z, clients[j]->privilege);
+            }
+            putint(z, -1);
+            sendpacket(-1, 1, z.finalize());
+        }
         checkpausegame();
         return true;
     }
@@ -1766,20 +1780,20 @@ namespace server
                 string kicker;
                 if(authname)
                 {
-                    if(authdesc && authdesc[0]) formatstring(kicker)("%s as '\fs\f5%s\fr' [\fs\f0%s\fr]", colorname(ci), authname, authdesc);
-                    else formatstring(kicker)("%s as '\fs\f5%s\fr'", colorname(ci), authname);
+                    if(authdesc && authdesc[0]) formatstring(kicker)("%s \f4as \f5'\f2%s\f5' \f0{\f6%s\f0}", colorname(ci), authname, authdesc);
+                    else formatstring(kicker)("%s \f4as \f5'\f2%s\f5'", colorname(ci), authname);
                 }
                 else copystring(kicker, colorname(ci));
                 string msg;
-                if(!ci->isspy)
+                if(!ci->isspy || !hidepriv || ci->privilege < PRIV_AUTH)
                 {
-                    if(reason && reason[0]) formatstring(msg)("%s kicked %s because: %s", kicker, colorname(vinfo), reason);
-                    else formatstring(msg)("%s kicked %s", kicker, colorname(vinfo));
+                    if(reason && reason[0]) formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s\f5(%i) \f7has been \f3kicked \f7by %s \f4because: \f0%s\f7.", vinfo->name, vinfo->clientnum, kicker, reason);
+                    else formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s\f5(%i) \f7has been \f3kicked \f7by %s\f7.", vinfo->name, vinfo->clientnum, kicker);
                 }
                 else
                 {
-                    if(reason && reason[0]) formatstring(msg)("%s was kicked because: %s", colorname(vinfo), reason);
-                    else formatstring(msg)("%s was kicked", colorname(vinfo));
+                    if(reason && reason[0]) formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s\f5(%i) \f7has been \f3kicked \f4because: \f0%s\f7.", vinfo->name, vinfo->clientnum, reason);
+                    else formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s\f5(%i) \f7has been\f7.", vinfo->name, vinfo->clientnum);
                 }
                 sendservmsg(msg);
                 uint ip = getclientip(victim);
@@ -3792,7 +3806,7 @@ namespace server
                 clientinfo * cx = getinfo(cn);
                 if(!cx)
                 {
-                    sendmsgf(ci, "\f0[PM]\f7: \f3Unknown \f2client \f1number\f7: \f0%i", cn);
+                    sendmsgf(ci, "\f0[INFO]\f7: \f6Unknown \f1client \f1number\f7: \f5%i", cn);
                 }
                 else
                 {
@@ -3803,7 +3817,7 @@ namespace server
         }
         else
         {
-            sendmsg(ci, "Usage: #pm <cn[,cn2[,...]]> <message>");
+            sendmsg(ci, "\f0[INFO]\f7: \f6Usage: \f5#\f2pm \f4<\f1cn\f4[,\f1cn2\f4[,...]]> <\f6message\f4>");
         }
     })
 
@@ -3967,14 +3981,14 @@ namespace server
         defformatstring(msg)("\f1%s \f7%s %s%s%s",
             colorname(ci),
             priv == PRIV_NONE ? "relinquished" : "claimed",
-            hidepriv && priv > PRIV_AUTH ? "\f4invisible " : "",
+            hidepriv && (priv > PRIV_AUTH || (priv == PRIV_NONE && ci->privilege > PRIV_AUTH)) ? "\f4invisible " : "",
             priv == PRIV_NONE ? privcolor(ci->privilege) : privcolor(priv),
             privname(priv == PRIV_NONE ? ci->privilege : priv)
         );
         if(hidepriv)
         {
             sendmsg(ci, msg);
-            loopv(clients) if(clients[i]->privilege >= priv) sendmsg(clients[i], msg);
+            loopv(clients) if(((priv != PRIV_NONE && clients[i]->privilege >= priv) || (priv == PRIV_NONE && clients[i]->privilege >= ci->privilege)) && clients[i]->clientnum != ci->clientnum) sendmsg(clients[i], msg);
         }
         else
         {
@@ -4018,6 +4032,18 @@ namespace server
                 putint(q, -1);
                 sendpacket(cx->clientnum, 1, q.finalize());
             }
+        }
+        else
+        {
+            packetbuf z(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+            putint(z, N_CURRENTMASTER);
+            putint(z, mastermode);
+            loopvj(clients) if(clients[j]->privilege >= PRIV_MASTER)
+            {
+                putint(z, clients[j]->clientnum);
+                putint(z, clients[j]->privilege);
+            }
+            putint(z, -1);
         }
         checkpausegame();
     }
@@ -4148,7 +4174,7 @@ namespace server
             int a = atoi(array[0]);
             autosendto = a==0?0:1;
         }
-        sendservmsgf("Automatically sendto on sendmap has been %sabled.", autosendto?"en":"dis");
+        sendservmsgf("\f0[INFO]\f7: \f1Automatically \f6sendto \f7at \f2sendmap \f4or at \f2connection \f7has been %sabled\f7..", autosendto?"\f0en":"\f3dis");
     })
 
     servcmd(getip, PRIV_AUTH, "<cn>", "displays a player's IP-Address.", {
@@ -4221,6 +4247,11 @@ namespace server
         sendservmsgf(args);
     })
 
+    servcmd(achat, PRIV_ADMIN, "<message>", "Sends a message to the admins-only chat.", {
+        if(!args || !*args) { sendmsg(ci, "usage: #achat <message>"); return; }
+        loopv(clients) if(clients[i]->privilege >= PRIV_ADMIN) sendmsgf(clients[i], "\f0[ADMINS-CHAT]\f7: \f1%s\f7: \f2%s", colorname(ci), args);
+    })
+
     servcmd(ban, PRIV_ADMIN, "<cn> <time in minutes> [reason]", "kicks and bans a client with the specified ban duration.", {
         char *array[3];
         explodeString(args, array, ' ', 3);
@@ -4281,8 +4312,9 @@ namespace server
         explodeString(args, array, ' ', 2);
         if(!array[0]) { sendmsg(ci, "usage: #unpban <id>. You can find the ids of the pbanned clients with #listpbans."); return; }
         int j = atoi(array[0]);
-        loopv(pbans) if(i==(j-1)) pbans.remove(i);
-        sendmsgf(ci, "\f0[INFO]\f7: The \f3PBan \7with the \f1ID \f2%i \f7has been succsessfully unbanned.", j);
+        bool removed = true;
+        loopv(pbans) if(i==(j-1)) { removed = true; pbans.remove(i); }
+        sendmsgf(ci, "\f0[INFO]\f7: The \f3PBan \f7with the \f1ID \f2%i \f7has been %ssuccsessfully \f7removed.", j, removed ? "\f0" : "\f6un");
     })
 
     servcmd(listpbans, PRIV_ADMIN, "", "lists all permemently banned clients.", {
@@ -4330,7 +4362,7 @@ namespace server
             if(!cx) { sendmsgf(ci, "\f0[REVOKEPRIV]\f7: \f3Unknown \f7client \f1number\f7: \f0%i", cn); continue; }
             if(cx->privilege >= ci->privilege && cx->clientnum != ci->clientnum) { sendmsg(ci, "\f0[REVOKEPRIV]\f7: Permission \f3denied\f7."); continue; }
             int oldpriv = cx->privilege;
-            givepriv(cx, PRIV_ADMIN);
+            givepriv(cx, PRIV_NONE);
             sendmsgf(cx, "\f0[REVOKEPRIV]\f7: \f1%s \f7has \f3revoken \f7your %s%s \f7privileges.", colorname(ci), privcolor(oldpriv), privname(oldpriv));
         }
     })
@@ -5139,7 +5171,7 @@ namespace server
                 if(ci->privilege || ci->local)
                 {
                     bannedips.shrink(0);
-                    sendservmsg("cleared all bans");
+                    sendservmsgf("\f0[INFO]\f7: All \f3bans \f7have been \f0cleared \f7by \f0%s\f7.", colorname(ci));
                 }
                 break;
             }

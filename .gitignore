@@ -3,5 +3,6 @@
 *.o
 *.so
 *.a
+*.json
 sauer_server
 sauer_master
