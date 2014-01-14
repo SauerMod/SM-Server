@@ -5171,7 +5171,7 @@ namespace server
                 if(ci->privilege || ci->local)
                 {
                     bannedips.shrink(0);
-                    sendservmsgf("\f0[INFO]\f7: All \f3bans \f7have been \f0cleared \f7by \f0%s\f7.", colorname(ci));
+                    sendservmsgf("\f0[INFO]\f7: All \f3bans \f7have been \f0cleared \f7by \f1%s\f7.", colorname(ci));
                 }
                 break;
             }

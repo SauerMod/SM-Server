@@ -1,5 +1,7 @@
 Changelog
 =========
+0.2.8:
+	* Minimal changes in clearbans.
 0.2.7:
 	* Fixed some invpriv stuff.
 	* Added admins (or higher) only chat (#achat).
