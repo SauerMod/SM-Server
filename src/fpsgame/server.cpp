@@ -4214,7 +4214,25 @@ namespace server
         int cn = atoi(array[0]);
         clientinfo *cx = getinfo(cn);
         if(!cx) { sendmsgf(ci, "unknown client num: %i", cn); return; }
-        sendmsgf(ci, "%s's IP-Address: %s", colorname(cx), getclienthostname(cn));
+#ifndef WIN32
+        bool geolocation_is_enabled = false;
+        int i = is_mod_loaded("geolocation");
+        typedef const char * (* getclientlocationtype)(const char *);
+        getclientlocationtype getclientlocation;
+        if(i >= 0)
+        {
+            getclientlocation = (getclientlocationtype)getexternal((char*)"geolocation_client_location");
+            if(getclientlocation) geolocation_is_enabled = true;
+        }
+#endif
+        sendmsgf(ci, "\f0[INFO]\f7: \f1%s\f7's \f2IP-Address\f7: \f3%s\f7%s%s", colorname(cx), getclienthostname(cn),
+#ifndef WIN32
+            geolocation_is_enabled ? " " : "",
+            geolocation_is_enabled ? getclientlocation(getclienthostname(cn)) : ""
+#else
+            "", ""
+#endif
+        );
     })
 
     servcmd(fspec, PRIV_AUTH, "<cn>", "forces a client to spectate.", {

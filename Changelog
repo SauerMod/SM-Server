@@ -1,5 +1,8 @@
 Changelog
 =========
+0.2.5:
+	* Modded geolocation module (now it adds a gfunction geolocation_client_location).
+	* #getip now showing client location.
 0.2.4:
 	* A lot of changes to the servcmd system.
 	* Fixed some spy and hiddenpriv stuff.
