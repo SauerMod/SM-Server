@@ -2475,7 +2475,7 @@ namespace server
             loopv(clients)
             {
                 clientinfo *ci = clients[i];
-                formatstring(message)("\f0[STATS]\f7: \f1Your \f2game \f6statistics \f7for this \f2match\f7: \f4%i \f6frags \f7- \f4%i \f2deaths \f0(kpd: \f4%.3f) \f7/ \f3accuracy: \f4%.3f%%",
+                formatstring(message)("\f0[STATS]\f7: \f1Your \f2game \f6statistics \f7for this \f2match\f7: \f4%i \f6frags \f7- \f4%i \f2deaths \f0(kpd: \f4%.3f\f0) \f7/ \f3accuracy: \f4%.3f%%",
                     ci->state.frags,
                     ci->state.deaths,
                     ((float)ci->state.frags/max(ci->state.deaths, 1)),
@@ -3814,7 +3814,7 @@ namespace server
         string bak;
         if(!array[0])
         {
-            formatstring(message)("\f0[STATS]\f7: Current \f2game \f6statistics \f7for \f1%s\f7: \f4%i \f6frags \f7- \f4%i \f2deaths \f0(kpd: \f4%.3f) \f7/ \f3accuracy: \f4%.3f%%",
+            formatstring(message)("\f0[STATS]\f7: Current \f2game \f6statistics \f7for \f1%s\f7: \f4%i \f6frags \f7- \f4%i \f2deaths \f0(kpd: \f4%.3f\f0) \f7/ \f3accuracy: \f4%.3f%%",
                 colorname(ci),
                 ci->state.frags,
                 ci->state.deaths,
@@ -3850,7 +3850,7 @@ namespace server
                 {
                     clientinfo *cx = clients[i];
                     if(!cx || cx->isspy) { continue; }
-                    formatstring(message)("\f0[STATS]\f7: Current \f2game \f6statistics \f7for \f1%s\f7: \f4%i \f6frags \f7- \f4%i \f2deaths \f0(kpd: \f4%.3f) \f7/ \f3accuracy: \f4%.3f%%",
+                    formatstring(message)("\f0[STATS]\f7: Current \f2game \f6statistics \f7for \f1%s\f7: \f4%i \f6frags \f7- \f4%i \f2deaths \f0(kpd: \f4%.3f\f0) \f7/ \f3accuracy: \f4%.3f%%",
                         colorname(cx),
                         cx->state.frags,
                         cx->state.deaths,
@@ -3907,23 +3907,6 @@ namespace server
     inline bool revbool(bool a)
         { return !a; }
 
-    servcmd(mute, PRIV_MASTER, "<cn> [0/1]", "toggles text-message mute for a client.", {
-        char*array[3];
-        explodeString(args, array, ' ', 3);
-        if(!array[0]) { sendmsg(ci, "Usage: #mute <cn> [0/1]"); return; }
-        int cn = atoi(array[0]);
-        clientinfo *cx = getinfo(cn);
-        if(!cx) return;
-        if(array[1])
-        {
-            int a = atoi(array[1]);
-            cx->mute = (a!=0);
-        }
-        else cx->mute = revbool(cx->mute);
-        sendmsgf(ci, "%s has been %smuted.", colorname(cx), cx->mute?"":"un");
-        sendmsgf(cx, "you have been %smuted.", cx->mute?"":"un");
-    })
-
     servcmd(emute, PRIV_MASTER, "<cn> [0/1]", "toggles edit mute for a client.", {
         char*array[3];
         explodeString(args, array, ' ', 3);
@@ -3939,37 +3922,6 @@ namespace server
         else cx->emute = revbool(cx->emute);
         sendmsgf(ci, "%s has been edit-%smuted.", colorname(cx), cx->emute?"":"un");
         sendmsgf(cx, "you have been edit-%smuted.", cx->emute?"":"un");
-    })
-
-    servcmd(nmute, PRIV_MASTER, "<cn> [0/1]", "toggles name mute for a client.", {
-        char*array[3];
-        explodeString(args, array, ' ', 3);
-        if(!array[0]) { sendmsg(ci, "Usage: #nmute <cn> [0/1]"); return; }
-        int cn = atoi(array[0]);
-        clientinfo *cx = getinfo(cn);
-        if(!cx) return;
-        if(array[1])
-        {
-            int a = atoi(array[1]);
-            cx->nmute = (a!=0);
-        }
-        else cx->nmute = revbool(cx->nmute);
-        sendmsgf(ci, "%s has been name-%smuted.", colorname(cx), cx->nmute?"":"un");
-        sendmsgf(cx, "you have been name-%smuted.", cx->nmute?"":"un");
-    })
-
-    bool smute = false;
-
-    servcmd(smute, PRIV_MASTER, "[0/1]", "toggles text-message mute for all spectators.", {
-        char*array[2];
-        explodeString(args, array, ' ', 2);
-        if(!array[0]) smute = revbool(smute);
-        else
-        {
-            int a = atoi(array[0]);
-            smute = (a!=0);
-        }
-        sendservmsgf("Text-message mute has been %sabled for all spectators.", smute?"en":"dis");
     })
 
     servcmd(sendto, PRIV_MASTER, "<cn[,cn2[,...]]>", "forces a client to getmap.", {
@@ -4006,11 +3958,6 @@ namespace server
                 cx->needclipboard = totalmillis ? totalmillis : 1;
             }
         }
-    })
-
-    servcmd(wall, PRIV_MASTER, "<message>", "Sends an anonymous message", {
-        if(!args || !*args) { sendmsg(ci, "usage: #wall <message>"); return; }
-        sendservmsgf(args);
     })
 
     void givepriv(clientinfo *ci, int priv)
@@ -4092,7 +4039,7 @@ namespace server
         }
     })
 
-    servcmd(persist, PRIV_MASTER, "[0/1]", "Enables teams persisting.", {
+    servcmd(persist, PRIV_AUTH, "[0/1]", "Enables teams persisting.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(array[0])
@@ -4102,6 +4049,55 @@ namespace server
         }
         else persistteams = revbool(persistteams);
         sendservmsgf("Team persisting has been %sabled.", persistteams ? "en" : "dis");
+    })
+
+
+    servcmd(mute, PRIV_AUTH, "<cn> [0/1]", "toggles text-message mute for a client.", {
+        char*array[3];
+        explodeString(args, array, ' ', 3);
+        if(!array[0]) { sendmsg(ci, "Usage: #mute <cn> [0/1]"); return; }
+        int cn = atoi(array[0]);
+        clientinfo *cx = getinfo(cn);
+        if(!cx) return;
+        if(array[1])
+        {
+            int a = atoi(array[1]);
+            cx->mute = (a!=0);
+        }
+        else cx->mute = revbool(cx->mute);
+        sendmsgf(ci, "%s has been %smuted.", colorname(cx), cx->mute?"":"un");
+        sendmsgf(cx, "you have been %smuted.", cx->mute?"":"un");
+    })
+
+    servcmd(nmute, PRIV_AUTH, "<cn> [0/1]", "toggles name mute for a client.", {
+        char*array[3];
+        explodeString(args, array, ' ', 3);
+        if(!array[0]) { sendmsg(ci, "Usage: #nmute <cn> [0/1]"); return; }
+        int cn = atoi(array[0]);
+        clientinfo *cx = getinfo(cn);
+        if(!cx) return;
+        if(array[1])
+        {
+            int a = atoi(array[1]);
+            cx->nmute = (a!=0);
+        }
+        else cx->nmute = revbool(cx->nmute);
+        sendmsgf(ci, "%s has been name-%smuted.", colorname(cx), cx->nmute?"":"un");
+        sendmsgf(cx, "you have been name-%smuted.", cx->nmute?"":"un");
+    })
+
+    bool smute = false;
+
+    servcmd(smute, PRIV_AUTH, "[0/1]", "toggles text-message mute for all spectators.", {
+        char*array[2];
+        explodeString(args, array, ' ', 2);
+        if(!array[0]) smute = revbool(smute);
+        else
+        {
+            int a = atoi(array[0]);
+            smute = (a!=0);
+        }
+        sendservmsgf("Text-message mute has been %sabled for all spectators.", smute?"en":"dis");
     })
 
     servcmd(persistb, PRIV_AUTH, "[0/1]", "Enables bots persisting.", {
@@ -4141,58 +4137,6 @@ namespace server
             sendpacket(-1, 1, p.finalize());
             sendmsgf(cx, "\f0[RENAME]\f7: \f1You \f7have been \f2renamed \f7to \f1%s\f7.", array[1]);
         }
-    })
-
-    servcmd(ban, PRIV_AUTH, "<cn> <time in minutes> [reason]", "kicks and bans a client with the specified ban duration.", {
-        char *array[3];
-        explodeString(args, array, ' ', 3);
-        if(!array[0]||!array[1]) { sendmsg(ci, "usage: #ban <cn> <time in minutes> [reason]"); return; }
-        int cn = atoi(array[0]);
-        clientinfo *cx = getinfo(cn);
-        if(!cx) { sendmsgf(ci, "Unknown client number: %i", cn); return; }
-        sendservmsgf("%s has banned %s for %i minutes%s%s",
-            colorname(ci),
-            colorname(cx),
-            atoi(array[1]),
-            array[2]?", reason: ":"",
-            array[2]?array[2]:""
-        );
-        addban(getclientip(cn), atoi(array[1])*60*1000);
-        disconnect_client(cn, DISC_IPBAN);
-    })
-
-    servcmd(unban, PRIV_AUTH, "<id>", "unbans a banned client.", {
-        char*array[2];
-        explodeString(args, array, ' ', 2);
-        if(!array[0]) { sendmsg(ci, "usage: #unban <id>. You can find the ids of the banned clients with #listbans."); return; }
-        int j = atoi(array[0]);
-        loopv(bannedips) if(i==(j-1)) { int j = allowedips.length(); allowedips.add(); allowedips[j]=bannedips[i].ip; bannedips.remove(i); }
-        sendmsgf(ci, "The ban with the ID %i has been succsessfully unbanned.", j);
-    })
-
-    servcmd(listbans, PRIV_AUTH, "", "lists all banned clients.", {
-        loopv(bannedips)
-        {
-            sendmsgf(ci, "ID %i, IP-Address: %i.%i.%i.%i, Expires: %i minutes", 
-                i+1,
-                bannedips[i].ip&0xFF, (bannedips[i].ip>>8)&0xFF, (bannedips[i].ip>>16)&0xFF, (bannedips[i].ip>>24)&0xFF,
-                (bannedips[i].expire-totalmillis)/60/1000
-            );
-        }
-    })
-
-    bool snmute = false;
-
-    servcmd(snmute, PRIV_AUTH, "[0/1]", "toggles name mute for all spectators.", {
-        char*array[2];
-        explodeString(args, array, ' ', 2);
-        if(!array[0]) snmute = revbool(snmute);
-        else
-        {
-            int a = atoi(array[0]);
-            snmute = (a!=0);
-        }
-        sendservmsgf("Name switch mute has been %sabled for all spectators.", snmute?"en":"dis");
     })
 
     servcmd(autosendto, PRIV_AUTH, "[0/1]", "toggles automaitcally sendto after sendmap.", {
@@ -4272,6 +4216,50 @@ namespace server
         sendservmsgf("\f0[INFO]\f7: \f1%s \f7has \f3forced \f7the intermission.", colorname(ci));
     })
 
+    servcmd(wall, PRIV_ADMIN, "<message>", "Sends an anonymous message", {
+        if(!args || !*args) { sendmsg(ci, "usage: #wall <message>"); return; }
+        sendservmsgf(args);
+    })
+
+    servcmd(ban, PRIV_ADMIN, "<cn> <time in minutes> [reason]", "kicks and bans a client with the specified ban duration.", {
+        char *array[3];
+        explodeString(args, array, ' ', 3);
+        if(!array[0]||!array[1]) { sendmsg(ci, "usage: #ban <cn> <time in minutes> [reason]"); return; }
+        int cn = atoi(array[0]);
+        clientinfo *cx = getinfo(cn);
+        if(!cx) { sendmsgf(ci, "Unknown client number: %i", cn); return; }
+        sendservmsgf("%s has banned %s for %i minutes%s%s",
+            colorname(ci),
+            colorname(cx),
+            atoi(array[1]),
+            array[2]?", reason: ":"",
+            array[2]?array[2]:""
+        );
+        addban(getclientip(cn), atoi(array[1])*60*1000);
+        disconnect_client(cn, DISC_IPBAN);
+    })
+
+    servcmd(unban, PRIV_ADMIN, "<id>", "unbans a banned client.", {
+        char*array[2];
+        explodeString(args, array, ' ', 2);
+        if(!array[0]) { sendmsg(ci, "usage: #unban <id>. You can find the ids of the banned clients with #listbans."); return; }
+        int j = atoi(array[0]);
+        loopv(bannedips) if(i==(j-1)) { int j = allowedips.length(); allowedips.add(); allowedips[j]=bannedips[i].ip; bannedips.remove(i); }
+        sendmsgf(ci, "The ban with the ID %i has been succsessfully unbanned.", j);
+    })
+
+    servcmd(listbans, PRIV_ADMIN, "", "lists all banned clients.", {
+        loopv(bannedips)
+        {
+            sendmsgf(ci, "ID %i, IP-Address: %i.%i.%i.%i, Expires: %i minutes", 
+                i+1,
+                bannedips[i].ip&0xFF, (bannedips[i].ip>>8)&0xFF, (bannedips[i].ip>>16)&0xFF, (bannedips[i].ip>>24)&0xFF,
+                (bannedips[i].expire-totalmillis)/60/1000
+            );
+        }
+    })
+
+
     servcmd(pban, PRIV_ADMIN, "<cn> [reason]", "kicks and permamently bans a client.", {
         char * Array[2];
         explodeString(args, Array, ' ', 2);
@@ -4283,7 +4271,7 @@ namespace server
         {
             if(cx->privilege >= ci->privilege) { sendmsg(ci, "Permission denied."); return; }
             addpban(getclienthostname(cx->clientnum), Array[1]?:"Unknown");
-            sendservmsgf("%s has added %s (%s) to the list of permament banned clients for %s.", colorname(ci), colorname(cx), getclienthostname(cx->clientnum), Array[1] ? Array[1] : "an unknown reason");
+            sendservmsgf("\f0[INFO]\f7: \f1%s \f7has \f0added \f1%s \f5(\f2%s\f5) \f7to the list of \f3permamently \f2banned \f7clients for \f2%s\f7.", colorname(ci), colorname(cx), getclienthostname(cx->clientnum), Array[1] ? Array[1] : "an unknown reason");
             disconnect_client(cx->clientnum, DISC_IPBAN);
         }
     })
@@ -4294,16 +4282,22 @@ namespace server
         if(!array[0]) { sendmsg(ci, "usage: #unpban <id>. You can find the ids of the pbanned clients with #listpbans."); return; }
         int j = atoi(array[0]);
         loopv(pbans) if(i==(j-1)) pbans.remove(i);
-        sendmsgf(ci, "The PBan with the ID %i has been succsessfully unbanned.", j);
+        sendmsgf(ci, "\f0[INFO]\f7: The \f3PBan \7with the \f1ID \f2%i \f7has been succsessfully unbanned.", j);
     })
 
     servcmd(listpbans, PRIV_ADMIN, "", "lists all permemently banned clients.", {
+        bool nopbans = true;
         loopv(pbans)
-            sendmsgf(ci, "ID %i, IP-Address: %s, Reason: %s", 
+        {
+            sendmsgf(ci, "\f0[INFO]\f7: \f1ID \f2%i\f7, \f6IP-Address: \f3%s\f7, \f5Reason: \f7%s.", 
                 i+1,
                 pbans[i].IP,
                 pbans[i].Reason[0]?pbans[i].Reason:"Unknown"
             );
+            nopbans = false;
+        }
+        if(nopbans)
+            sendmsg(ci, "\f0[INFO]\f7: \f2At the moment\f7, there are no \f3PBans\f7.");
     })
 
     servcmd(giveadmin, PRIV_ADMIN, "<cn[,cn2[,...]]>", "gives admin privileges to a client.", {
@@ -4985,7 +4979,7 @@ namespace server
             case N_SWITCHNAME:
             {
 //                QUEUE_MSG;
-                if(ci->nmute || (ci->state.state==CS_SPECTATOR && snmute)) return;
+                if(ci->nmute) return;
                 getstring(text, p);
                 filtertext(ci->name, text, false, MAXNAMELEN);
                 if(!ci->name[0]) copystring(ci->name, "unnamed");

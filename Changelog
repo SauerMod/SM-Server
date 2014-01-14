@@ -1,5 +1,9 @@
 Changelog
 =========
+0.2.6:
+	* Removed #snmute ('Cause that command made no sense).
+	* Changed some required privilege levels for some player commands.
+	* Small changes in #stats.
 0.2.5:
 	* Modded geolocation module (now it adds a gfunction geolocation_client_location).
 	* #getip now showing client location.
