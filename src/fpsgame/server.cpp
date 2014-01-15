@@ -1585,7 +1585,7 @@ namespace server
 
     extern void connected(clientinfo *ci);
 
-    VARP(hidepriv, 0, 0, 1);
+    VAR(hidepriv, 0, 0, 1);
 
     const char * privcolor(int priv)
     {
@@ -1619,6 +1619,8 @@ namespace server
             return "\f7"; 
     }
 
+    SVAR(masterpass, "");
+
     bool setmaster(clientinfo *ci, bool val, const char *pass = "", const char *authname = NULL, const char *authdesc = NULL, int authpriv = PRIV_MASTER, bool force = false, bool trial = false)
     {
         if(authname && !val) return false;
@@ -1627,12 +1629,13 @@ namespace server
         if(val)
         {
             bool haspass = adminpass[0] && checkpassword(ci, adminpass, pass);
+            bool hasmpass = masterpass[0] && checkpassword(ci, masterpass, pass);
             int wantpriv = ci->local || haspass ? PRIV_ADMIN : authpriv;
             if(ci->privilege)
             {
                 if(wantpriv <= ci->privilege) return true;
             }
-            else if(wantpriv <= PRIV_MASTER && !force)
+            else if(wantpriv <= PRIV_MASTER && !force && !hasmpass)
             {
                 if(ci->state.state==CS_SPECTATOR) 
                 {
@@ -1713,7 +1716,7 @@ namespace server
         putint(p, mastermode);
         loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->isspy)
         {
-            if((clients[i]->privilege > PRIV_AUTH && !hidepriv) || clients[i]->clientnum == ci->clientnum) continue;
+            if((clients[i]->privilege > PRIV_AUTH && hidepriv) || clients[i]->clientnum == ci->clientnum) continue;
             putint(p, clients[i]->clientnum);
             putint(p, clients[i]->privilege);
         }
@@ -3985,10 +3988,11 @@ namespace server
             priv == PRIV_NONE ? privcolor(ci->privilege) : privcolor(priv),
             privname(priv == PRIV_NONE ? ci->privilege : priv)
         );
-        if(hidepriv)
+        bool val = priv == PRIV_NONE;
+        if(hidepriv && priv > PRIV_AUTH)
         {
             sendmsg(ci, msg);
-            loopv(clients) if(((priv != PRIV_NONE && clients[i]->privilege >= priv) || (priv == PRIV_NONE && clients[i]->privilege >= ci->privilege)) && clients[i]->clientnum != ci->clientnum) sendmsg(clients[i], msg);
+            loopv(clients) if(((val && clients[i]->privilege >= priv) || (!val && clients[i]->privilege >= PRIV_ADMIN)) && clients[i] != ci) sendmsg(clients[i], msg);
         }
         else
         {
@@ -3997,15 +4001,15 @@ namespace server
         }
         putint(p, N_CURRENTMASTER);
         putint(p, mastermode);
+        ci->privilege = priv;
         loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->isspy)
         {
-            if(clients[i]->privilege > PRIV_AUTH && !hidepriv) continue;
+            if(clients[i]->privilege > PRIV_AUTH && hidepriv) continue;
             putint(p, clients[i]->clientnum);
             putint(p, clients[i]->privilege);
         }
         putint(p, -1);
         sendpacket(-1, 1, p.finalize());
-        ci->privilege = priv;
         if(hidepriv)
         {
             packetbuf z(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
@@ -4044,9 +4048,34 @@ namespace server
                 putint(z, clients[j]->privilege);
             }
             putint(z, -1);
+            sendpacket(-1, 1, z.finalize());
         }
         checkpausegame();
     }
+
+    servcmd(setpriv, PRIV_MASTER, "<cn[,cn2[,...]]> <none/master/auth/admin>", "gives the specified privileges to a client.", {
+        char*array[3];
+        explodeString(args, array, ' ', 3);
+        if(!array[0] || !array[1]) { sendmsg(ci, "usage: #setpriv <cn[,cn2[,...]]> <none/master/auth/admin>"); return; }
+        int wantpriv = PRIV_NONE;
+        if(!strcmp(array[1], "none")) wantpriv = PRIV_NONE;
+        else if(!strcmp(array[1], "master")) wantpriv = PRIV_MASTER;
+        else if(!strcmp(array[1], "auth")) wantpriv = PRIV_AUTH;
+        else if(!strcmp(array[1], "admin")) wantpriv = PRIV_ADMIN;
+        else { sendmsg(ci, "usage: #setpriv <cn[,cn2[,...]]> <none/master/auth/admin>"); return; }
+        if(wantpriv > ci->privilege) { sendmsg(ci, "\f0[SETPRIV]\f7: \f3Permission \f2denied\f7."); return; } 
+        char *cns[128];
+        explodeString(array[0], cns, ',', 128);
+        for(int i = 0; cns[i]; i++)
+        {
+            int cn = atoi(cns[i]);
+            clientinfo *cx = getinfo(cn);
+            if(!cx) { sendmsgf(ci, "\f0[SETPRIV]\f7: \f3Unknown \f7client \f1number\f7: \f0%i", cn); continue; }
+            if(cx->privilege >= ci->privilege && cx->clientnum != ci->clientnum) { sendmsg(ci, "\f0[SETPRIV]\f7: Permission \f3denied\f7."); continue; }
+            givepriv(cx, wantpriv);
+            sendmsgf(cx, "\f0[SETPRIV]\f7: \f1%s \f7has given you %s%s \f7privileges.", colorname(ci), privcolor(wantpriv), privname(wantpriv));
+        }
+    })
 
     servcmd(givemaster, PRIV_MASTER, "<cn[,cn2[,...]]>", "gives master privileges to a client.", {
         char*array[2];
@@ -4059,7 +4088,7 @@ namespace server
             int cn = atoi(cns[i]);
             clientinfo *cx = getinfo(cn);
             if(!cx) { sendmsgf(ci, "\f0[GIVEMASTER]\f7: \f3Unknown \f7client \f1number\f7: \f0%i", cn); continue; }
-            if(cx->privilege >= ci->privilege && cx->clientnum != ci->clientnum) { sendmsg(ci, "\f0[GIVEADMIN]\f7: Permission \f3denied\f7."); continue; }
+            if(cx->privilege >= ci->privilege && cx->clientnum != ci->clientnum) { sendmsg(ci, "\f0[GIVEMASTER]\f7: Permission \f3denied\f7."); continue; }
             givepriv(cx, PRIV_MASTER);
             sendmsgf(cx, "\f0[GIVEMASTER]\f7: \f1%s \f7has given you \f0master \f7privileges.", colorname(ci));
         }
@@ -4240,6 +4269,57 @@ namespace server
     servcmd(intermission, PRIV_AUTH, "", "Starts the intermission.", {
         startintermission();
         sendservmsgf("\f0[INFO]\f7: \f1%s \f7has \f3forced \f7the intermission.", colorname(ci));
+    })
+
+    servcmd(hidepriv, PRIV_ADMIN, "[0/1]", "toggles text-message mute for all spectators.", {
+        char*array[2];
+        explodeString(args, array, ' ', 2);
+        if(!array[0]) hidepriv = revbool(hidepriv);
+        else
+        {
+            int a = atoi(array[0]);
+            hidepriv = (a!=0);
+        }
+        if(hidepriv)
+        {
+            packetbuf z(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+            putint(z, N_CURRENTMASTER);
+            putint(z, mastermode);
+            loopvj(clients) if(clients[j]->privilege == PRIV_MASTER || clients[j]->privilege == PRIV_AUTH)
+            {
+                putint(z, clients[j]->clientnum);
+                putint(z, clients[j]->privilege);
+            }
+            putint(z, -1);
+            sendpacket(-1, 1, z.finalize());
+            loopvj(clients) if(clients[j]->privilege >= PRIV_MASTER)
+            {
+                clientinfo *cx = clients[j];
+                packetbuf q(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+                putint(q, N_CURRENTMASTER);
+                putint(q, mastermode);
+                loopv(clients) if((clients[i]->privilege >= PRIV_MASTER && clients[i]->privilege <= cx->privilege && !clients[i]->isspy) || clients[i]->clientnum == cx->clientnum)
+                {
+                    putint(q, clients[i]->clientnum);
+                    putint(q, clients[i]->privilege);
+                }
+                putint(q, -1);
+                sendpacket(cx->clientnum, 1, q.finalize());
+            }
+        }
+        else
+        {
+            packetbuf z(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+            putint(z, N_CURRENTMASTER);
+            putint(z, mastermode);
+            loopvj(clients) if(clients[j]->privilege >= PRIV_MASTER && !clients[j]->isspy)
+            {
+                putint(z, clients[j]->clientnum);
+                putint(z, clients[j]->privilege);
+            }
+            putint(z, -1);
+        }
+        sendmsgf(ci, "\f0[INFO]\f7: \f2Privileges \f7are %s \f0hidden\f7.", hidepriv ? "\f1now" : "\f3no more");
     })
 
     servcmd(wall, PRIV_ADMIN, "<message>", "Sends an anonymous message", {

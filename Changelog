@@ -1,5 +1,10 @@
 Changelog
 =========
+0.2.9:
+	* Small changes in hidepriv function.
+	* Added #hidepriv command.
+	* Added a masterpass.
+	* Added a #setpriv player command.
 0.2.8:
 	* Minimal changes in clearbans.
 0.2.7:

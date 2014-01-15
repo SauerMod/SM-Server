@@ -43,6 +43,8 @@ Current features:
 	+ Spectators only team-chat
 	+ Displays flagruns, stores best flagruns.
 	+ Spy system.
+	+ Permament bans system.
+	+ Owner privilege level.
 	+ Modules system
 	  -> Geolocation module         -> A un-/re-/loadable module to show client's geolocation on connect.
 
