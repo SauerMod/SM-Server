@@ -4271,7 +4271,7 @@ namespace server
         sendservmsgf("\f0[INFO]\f7: \f1%s \f7has \f3forced \f7the intermission.", colorname(ci));
     })
 
-    servcmd(hidepriv, PRIV_ADMIN, "[0/1]", "toggles text-message mute for all spectators.", {
+    servcmd(hidepriv, PRIV_ADMIN, "[0/1]", "toggles privilege hiding.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(!array[0]) hidepriv = revbool(hidepriv);
