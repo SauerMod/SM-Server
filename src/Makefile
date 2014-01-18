@@ -81,7 +81,8 @@ endif
 
 default: all
 
-all: server master
+# all: server master
+all: server 
 
 clean:
 	-$(RM) $(SERVER_OBJS) $(MASTER_OBJS) sauer_server sauer_master
@@ -114,10 +115,10 @@ master: libenet $(MASTER_OBJS)
 
 install: all
 	cp sauer_server	../sauer_server
-	cp sauer_master	../sauer_master
+#	cp sauer_master	../sauer_master
 ifneq (,$(STRIP))
 	$(STRIP) ../sauer_server
-	$(STRIP) ../sauer_master
+#	$(STRIP) ../sauer_master
 endif
 endif
 

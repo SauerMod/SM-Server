@@ -2818,13 +2818,12 @@ ICOMMAND(loopfiles, "rsse", (ident *id, char *dir, char *ext, uint *body),
 });
 
 ICOMMAND(findfile, "s", (char *name),
-{ 
+{
     string fname;
     copystring(fname, name);
     path(fname);
     intret(fileexists(fname, "e") || findfile(fname, "e") ? 1 : 0);
-});
-
+}); 
 
 struct sortitem
 {
@@ -3065,7 +3064,6 @@ char *strreplace(const char *s, const char *oldval, const char *newval)
 
 ICOMMAND(strreplace, "sss", (char *s, char *o, char *n), commandret->setstr(strreplace(s, o, n)));
 
-#ifndef STANDALONE
 ICOMMAND(getmillis, "i", (int *total), intret(*total ? totalmillis : lastmillis));
 
 struct sleepcmd
@@ -3122,5 +3120,3 @@ void clearsleep_(int *clearoverrides)
 }
 
 COMMANDN(clearsleep, clearsleep_, "i");
-#endif
-

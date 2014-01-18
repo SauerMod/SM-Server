@@ -1,5 +1,10 @@
 Changelog
 =========
+0.3.0:
+	* Small fix.
+	* Added #racemode
+	* Added #emute -1
+	* Added ranges pban system (#rpban24 #rpban16 #rpban8)
 0.2.9:
 	* Small changes in hidepriv function.
 	* Added #hidepriv command.

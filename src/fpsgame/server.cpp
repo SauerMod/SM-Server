@@ -116,6 +116,8 @@ namespace server
         }
     };
 
+    bool racemode = false;
+
     struct gamestate : fpsstate
     {
         vec o;
@@ -158,7 +160,7 @@ namespace server
         void respawn()
         {
             fpsstate::respawn();
-            o = vec(-1e10f, -1e10f, -1e10f);
+            if(!racemode) o = vec(-1e10f, -1e10f, -1e10f);
             deadflush = 0;
             lastspawn = -1;
             lastshot = 0;
@@ -239,8 +241,9 @@ namespace server
         int authkickvictim;
         char *authkickreason;
         bool forcespec, mute, emute, nmute;
-        bool isspy;
+        bool isspy, islooser;
         int lasttakeflag;
+        int spectimes;
 
         clientinfo() : getdemo(NULL), getmap(NULL), clipboard(NULL), authchallenge(NULL), authkickreason(NULL) { reset(); }
         ~clientinfo() { events.deletecontents(); cleanclipboard(); cleanauth(); }
@@ -871,8 +874,77 @@ namespace server
     {
         string IP;
         string Reason;
+        bool hide;
     };
     vector<pban> pbans;
+
+    struct rpban
+    {
+        string Range;
+        string Reason;
+        int type;
+    };
+    vector<rpban> rpbans;
+
+    void addrpban24(const char *range, const char *reason)
+    {
+        loopv(rpbans) if(!strcmp(rpbans[i].Range, range)) return;
+        rpban &_rpban = rpbans.add();
+        copystring(_rpban.Range, range);
+        copystring(_rpban.Reason, reason);
+        _rpban.type = 24;
+        for(int i = 1; i <= 255; i++)
+        {
+            pban &_pban = pbans.add();
+            defformatstring(ip)("%s.%i", range, i);
+            copystring(_pban.IP, (const char *)ip);
+            copystring(_pban.Reason, reason);
+            _pban.hide = true;
+        }
+    }
+
+    void addrpban16(const char *range, const char *reason)
+    {
+        loopv(rpbans) if(!strcmp(rpbans[i].Range, range)) return;
+        rpban &_rpban = rpbans.add();
+        copystring(_rpban.Range, range);
+        copystring(_rpban.Reason, reason);
+        _rpban.type = 16;
+        for(int i = 1; i <= 255; i++)
+        {
+            for(int j = 1; j <= 255; j++)
+            {
+                pban &_pban = pbans.add();
+                defformatstring(ip)("%s.%i.%i", range, i, j);
+                copystring(_pban.IP, (const char *)ip);
+                copystring(_pban.Reason, reason);
+                _pban.hide = true;
+            }
+        }
+    }
+
+    void addrpban8(const char *range, const char *reason)
+    {
+        loopv(rpbans) if(!strcmp(rpbans[i].Range, range)) return;
+        rpban &_rpban = rpbans.add();
+        copystring(_rpban.Range, range);
+        copystring(_rpban.Reason, reason);
+        _rpban.type = 8;
+        for(int i = 1; i <= 255; i++)
+        {
+            for(int j = 1; j <= 255; j++)
+            {
+                for(int z = 1; z <= 255; z++)
+                {
+                    pban &_pban = pbans.add();
+                    defformatstring(ip)("%s.%i.%i.%i", range, i, j, z);
+                    copystring(_pban.IP, (const char *)ip);
+                    copystring(_pban.Reason, reason);
+                    _pban.hide = true;
+                }
+            }
+        }
+    }
 
     void addpban(const char *ip, const char *reason)
     {
@@ -880,6 +952,7 @@ namespace server
         pban &_pban = pbans.add();
         copystring(_pban.IP, ip);
         copystring(_pban.Reason, reason);
+        _pban.hide = false;
     }
 
     inline void addpbanf(const char *ip, const char *reason, ...)
@@ -1675,8 +1748,9 @@ namespace server
         bool needshide = true;
         if(val && authname) 
         {
-            if(authdesc && authdesc[0]) formatstring(msg)("\f1%s\f7 claimed %s%s%s\f7 as \f5'\f2%s\f5' \f7[\fs\f0%s\f7]",
-                colorname(ci),
+            if(authdesc && authdesc[0]) formatstring(msg)("\f0[INFO]\f7: Player \f1%s\f5(%i)\f7 claimed %s%s%s\f7 as \f5'\f2%s\f5' \f5{\f2%s\f5}",
+                ci->name,
+                ci->clientnum,
                 hidepriv ? "\f4invisible " : "",
                 privcolor(ci->privilege),
                 name,
@@ -1685,8 +1759,9 @@ namespace server
             );
             else
             {
-                formatstring(msg)("\f1%s\f7 claimed %s%s\f7 as \f5'\f2%s\f5'",
-                    colorname(ci),
+                formatstring(msg)("\f0[INFO]\f7: Player \f1%s\f5(%i)\f7 claimed %s%s\f7 as \f5'\f2%s\f5'",
+                    ci->name,
+                    ci->clientnum,
                     privcolor(ci->privilege),
                     name,
                     authname
@@ -1694,18 +1769,22 @@ namespace server
                 needshide = false;
             }
         } 
-        else formatstring(msg)("\f1%s \f7%s %s%s%s",
-            colorname(ci),
+        else formatstring(msg)("\f0[INFO]\f7: Player \f1%s\f5(%i) \f7%s %s%s%s",
+            ci->name,
+            ci->clientnum,
             val ? "claimed" : "relinquished",
             ((val && ci->privilege > PRIV_AUTH) || oldpriv > PRIV_AUTH) && hidepriv ? "\f4invisible " : "",
             privcolor(name),
             name
         );
         packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
-        if(hidepriv && needshide)
+        if((hidepriv && needshide) || ci->isspy)
         {
             sendmsg(ci, msg);
-            loopv(clients) if(((val && clients[i]->privilege >= ci->privilege) || (!val && clients[i]->privilege >= PRIV_ADMIN)) && clients[i] != ci) sendmsg(clients[i], msg);
+            if(!ci->isspy)
+            {
+                loopv(clients) if(((val && clients[i]->privilege >= ci->privilege) || (!val && clients[i]->privilege >= PRIV_ADMIN)) && clients[i] != ci) sendmsg(clients[i], msg);
+            }
         }
         else
         {
@@ -2229,8 +2308,9 @@ namespace server
                 gs.lastspawn = gamemillis;
             }
         }
-        if(ci && ci->state.state==CS_SPECTATOR)
+        if(ci && (ci->state.state==CS_SPECTATOR || mastermode>=MM_LOCKED))
         {
+            if(ci->state.state!=CS_SPECTATOR) ci->state.state = CS_SPECTATOR;
             putint(p, N_SPECTATOR);
             putint(p, ci->clientnum);
             putint(p, 1);
@@ -2307,7 +2387,105 @@ namespace server
 
     bool persistteams = false;
     bool persistbots = false;
-        
+
+    void suicide(clientinfo *);
+
+    ICOMMAND(respawn_all, "", (), {
+        loopv(clients)
+        {
+            suicide(clients[i]);
+        }
+    })
+
+    void startintermission();
+
+    ICOMMAND(intermission, "", (), {
+        startintermission();
+    })
+
+    ICOMMAND(getclientname, "i", (int *cn), {
+        loopv(clients)
+        {
+            if(clients[i]->clientnum == *cn)
+            {
+                result(colorname(clients[i]));
+                return;
+            }
+        }
+        result("");
+    })
+
+    ICOMMAND(clientshavemap, "", (), {
+        int ret = 1;
+        loopv(clients) if(clients[i]->clientmap[0] == '\0' || !clients[i]->clientmap[0]) ret = 0;
+        intret(ret);
+    })
+
+    struct racerun
+    {
+        string map;
+        string name;
+        int millis;
+    };
+    vector<racerun> raceruns;
+
+    ICOMMAND(raceseconds, "", (), {
+        floatret((float)(gamemillis-5000)/1000.0f);
+    })
+
+    ICOMMAND(bestraceseconds, "", (), {
+        loopv(raceruns)
+        {
+            if(!strcmp((const char *)raceruns[i].map, smapname))
+            {
+                floatret((float)raceruns[i].millis/1000.0f);
+                return;
+            }
+        }
+        floatret(0.0f);
+    })
+
+    ICOMMAND(bestracerunner, "", (), {
+        loopv(raceruns)
+        {
+            if(!strcmp((const char *)raceruns[i].map, smapname))
+            {
+                result((const char *)raceruns[i].name);
+                return;
+            }
+        }
+        result("");
+    })
+
+    ICOMMAND(isbestrace, "", (), {
+        loopv(raceruns)
+        {
+            if(!strcmp((const char *)raceruns[i].map, smapname))
+            {
+                if(raceruns[i].millis < gamemillis) intret(0);
+                return;
+            }
+        }
+        intret(1);
+    })
+
+    ICOMMAND(addbestrace, "s", (const char *runner), {
+        loopv(raceruns)
+        {
+            if(!strcmp(raceruns[i].map, smapname))
+            {
+                if(raceruns[i].millis > gamemillis) raceruns.remove(i);
+                else return;
+            }
+        }
+        racerun &cur = raceruns.add();
+        copystring(cur.map, smapname);
+        copystring(cur.name, runner);
+        cur.millis = gamemillis;
+    })
+
+    void loadmap();
+
     void changemap(const char *s, int mode)
     {
         stopdemo();
@@ -2366,7 +2544,152 @@ namespace server
         }
 
         if(smode) smode->setup();
+
+        if(racemode && m_edit)
+        {
+            loopv(clients) { clients[i]->islooser = false; clients[i]->spectimes = 0; }
+            execute("clearsleep");
+            sendservmsg("\f0[RACE-BOT]\f7: Delivering the \f3map\f7...");
+            loadmap();
+            sendservmsg("\f0[RACE-BOT]\f7: Waiting for all \f2clients \f7to get the map...");
+            execute("c = [if (clientshavemap) [z = [if (> $i 0) [wall (concatword \"\f0[RACE-BOT]\f7: The \f2game \f7will \f0start \f7in \f1\" $i \" \f7second\f4(s)\f7!\"); sleep 1000 [i = (- $i 1); z]] [wall \"\f0[RACE-BOT]\f7: The \f2race \f7has \f0started\f7!\"; respawn_all]]; i = 5; z] [sleep 1 c]]; c");
+            execute("sleep 7250 [zz = [if (!= (checkplayerspos) -1) [wall (concatword \"\f0[RACE-BOT]\f7: \f1\" (getclientname (checkplayerspos)) \" \f7has \f0won \f7the \f2race!\"); if (isbestrace) [wall (concatword \"\f0[RACE-BOT]\f7: \f1\" (getclientname (checkplayerspos)) \" \f7has done a new \f3best \f2score \f7for this \f2race! \f1\" (raceseconds) \" \f2seconds\f7.\"); addbestrace (getclientname (checkplayerspos))] [wall (concatword \"\f0[RACE-BOT]\f7: \f3Best \f2time \f7for this \f1race: \f1\" (bestraceseconds) \" \f2seconds \f7by \" (bestracerunner)\"\f7.\")]; zz = []; zzz]; sleep 1 zz]; zz]");
+            execute("sleep 7500 [zzzz = 20; zzz = [if (|| (|| (= $zzzz 20) (= $zzzz 10)) (<= $zzzz 5)) [wall (concatword \"\f0[RACE-BOT]\f7: \f0Starting \f7a \f6new \f2race \f7in \f6\" $zzzz \" \f2second\f4(s)\f7.\")]; sleep 1000 [zzzz = (- $zzzz 1); if (= $zzzz 0) [zzz = []; intermission] [zzz]]]");
+        }
+        else execute("z = []; zz = []; zzz = []; zzzz = [];");
     }
+
+    ICOMMAND(getplayerposx, "i", (int *cn), {
+        loopv(clients) if(clients[i]->clientnum == *cn)
+        {
+            intret((int)clients[i]->state.o.x);
+            return;
+        }
+        intret(0);
+    });
+
+    ICOMMAND(getplayerposy, "i", (int *cn), {
+        loopv(clients) if(clients[i]->clientnum == *cn)
+        {
+            intret((int)clients[i]->state.o.y);
+            return;
+        }
+        intret(0);
+    });
+
+    ICOMMAND(getplayerposz, "i", (int *cn), {
+        loopv(clients) if(clients[i]->clientnum == *cn)
+        {
+            intret((int)clients[i]->state.o.z);
+            return;
+        }
+        intret(0);
+    });
+
+    struct lrend
+    {
+        int x, y, z;
+        string name;
+        bool operator==(const vec &o)
+        {
+            int a = (int)o.x > x ? (int)o.x : x;
+            int b = (int)o.y > y ? (int)o.y : y;
+            int c = (int)o.z > z ? (int)o.z : z;
+            // ------------------------------ //
+            int d = (int)o.x < x ? (int)o.x : x;
+            int e = (int)o.y < y ? (int)o.y : y;
+            int f = (int)o.z < z ? (int)o.z : z;
+            return ((a - d) < 32) && ((b - e) < 32) && ((c - f) < 32);
+        }
+    };
+
+    vector<lrend> lrends;
+
+    void addlrend(const char *n, int a, int b, int c)
+    {
+        lrend &cur = lrends.add();
+        cur.x = a;
+        cur.y = b;
+        cur.z = c;
+        copystring(cur.name, n);
+    }
+
+    ICOMMAND(lrinitialize, "", (), {
+        // LITTLE-RACE-XX map end locations taken from CMEdition client.
+        addlrend("LITTLE-RACE-0" ,   512,    83,   405);
+        addlrend("LITTLE-RACE-1" ,  1426,  1023,  1043); 
+        addlrend("LITTLE-RACE-2" ,   365,  2814,   990);
+        addlrend("LITTLE-RACE-3" ,  9472,  6579,  8542);
+        addlrend("LITTLE-RACE-4" , 16509, 24436, 24862);
+        addlrend("LITTLE-RACE-5" ,  8190, 13715,  4126);
+        addlrend("LITTLE-RACE-6" ,  1401,   808,  2146);
+        addlrend("LITTLE-RACE-7" ,  3361,  1680,  2276);
+        addlrend("LITTLE-RACE-8" ,   641,  1414,  1166);
+        addlrend("LITTLE-RACE-9" ,  6494,  8727,  4318);
+        addlrend("LITTLE-RACE-10",  5335,  5919,  4190);
+        addlrend("LITTLE-RACE-11",  1951,  3219,  1619);
+        addlrend("LITTLE-RACE-12",  7378,  4095,  4116);
+        addlrend("LITTLE-RACE-13",   991,  1994,  1361);
+        addlrend("LITTLE-RACE-14",  3403,  9856,  6419);
+        addlrend("LITTLE-RACE-15",  5936,  5591,  7070);
+        addlrend("LITTLE-RACE-16",  1152,  3095,  2718);
+        addlrend("LITTLE-RACE-17",   578,   620,   853);
+        addlrend("LITTLE-RACE-18",  3039,  2700,  2466);
+        addlrend("LITTLE-RACE-19",  4639,  4996,  3422);
+        addlrend("LITTLE-RACE-20",  2688,  2664,  2462);
+        addlrend("LITTLE-RACE-21",  3392,    51,  3470);
+        addlrend("LITTLE-RACE-22",  1152,   313,  1374);
+        addlrend("LITTLE-RACE-23", 10240, 10030,  8985);
+        addlrend("LITTLE-RACE-24",  4341,  5504,  4979);
+        addlrend("LITTLE-RACE-25",  4864,  3471,  3988);
+        addlrend("LITTLE-RACE-26",  1086,  2793,  1950);
+        addlrend("LITTLE-RACE-27",  1020,  2047,  2515);
+        addlrend("LITTLE-RACE-28",  3761,  2607,  1830);
+        addlrend("LITTLE-RACE-29",  6402,  6248,  9630);
+        addlrend("LITTLE-RACE-30", 33387, 35008, 33630);
+        addlrend("LITTLE-RACE-31", 38227, 32899, 32853);
+        addlrend("LITTLE-RACE-32",  2383,   784,  2930);
+        addlrend("LITTLE-RACE-33",  4518,  6271,  2142);
+        addlrend("LITTLE-RACE-34",  2400,   661,   838);
+        addlrend("LITTLE-RACE-35", 32496, 32767, 33342);
+        addlrend("LITTLE-RACE-36", 30107, 33271, 33550);
+        addlrend("LITTLE-RACE-37",  2047,  3826,  1694);
+        addlrend("LITTLE-RACE-38", 33150, 27537, 32832);
+        addlrend("LITTLE-RACE-39", 39968, 35808, 10389);
+        addlrend("LITTLE-RACE-40",  3115,  4033,  6177);
+        addlrend("LITTLE-RACE-41", 32832, 36495, 20198);
+        addlrend("LITTLE-RACE-42", 32634, 32768, 33234);
+        addlrend("LITTLE-RACE-43",  2863,  2178,  1950);
+        addlrend("LITTLE-RACE-44",  6660,  4337,   145);
+        addlrend("LITTLE-RACE-45",  1551,   155,  1107);
+        addlrend("LITTLE-RACE-46",  2482,  2031,  4129);
+        addlrend("LITTLE-RACE-47",  9215, 13846,  4114);
+        addlrend("LITTLE-RACE-48",  5194,  4657,  3390);
+    }) 
+
+    ICOMMAND(lruninitialize, "", (), {
+        lrends.shrink(0);
+    })
+
+    ICOMMAND(checkplayerspos, "", (), {
+        if(!racemode || !m_edit) { intret(-1); return; }
+        loopv(lrends)
+        {
+            if(!strcmp(lrends[i].name, smapname))
+            {
+                loopvj(clients)
+                {
+                    if(clients[j]->state.state!=CS_ALIVE || clients[j]->islooser) continue;
+                    if(lrends[i] == clients[j]->state.o)
+                    {
+                        intret(clients[j]->clientnum);
+                        return;
+                    }
+                }
+            }
+        }
+        intret(-1);
+    })
 
     void rotatemap(bool next)
     {
@@ -2481,14 +2804,26 @@ namespace server
         }
     }
 
+    int curlr = 0;
+
     void checkintermission()
     {
         if(gamemillis >= gamelimit && !interm)
         {
             sendf(-1, 1, "ri2", N_TIMEUP, 0);
             if(smode) smode->intermission();
+            changegamespeed(100);
             string message;
             string bak;
+            if(racemode && m_edit)
+            {
+                sendservmsg("\f0[INFO]\f7: Changing to a \f3new \f7race...");
+                defformatstring(mapname)("LITTLE-RACE-%i", curlr < 48 ? curlr+1 : 0);
+                curlr = curlr < 48 ? curlr+1 : 0;
+                changemap(mapname, 1);
+                return;
+            }
+            interm = gamemillis + 10000;
             loopv(clients)
             {
                 clientinfo *ci = clients[i];
@@ -2515,8 +2850,6 @@ namespace server
                 }
                 sendmsg(ci, message);
             }
-            changegamespeed(100);
-            interm = gamemillis + 10000;
         }
     }
 
@@ -2524,6 +2857,7 @@ namespace server
 
     void dodamage(clientinfo *target, clientinfo *actor, int damage, int gun, const vec &hitpush = vec(0, 0, 0))
     {
+        if(m_edit && (racemode/* || nodamage*/)) return;
         gamestate &ts = target->state;
         ts.dodamage(damage);
         if(target!=actor && !isteam(target->team, actor->team)) actor->state.damage += damage;
@@ -2848,7 +3182,7 @@ namespace server
         {
             clientinfo *ci = clients[i];
             if(ci->state.state==CS_SPECTATOR || ci->state.aitype != AI_NONE || ci->clientmap[0] || ci->mapcrc >= 0 || (req < 0 && ci->warned) || ci->isspy) continue;
-            formatstring(msg)("%s has modified map \"%s\"", colorname(ci), smapname);
+            formatstring(msg)("\f0[INFO]\f7: \f7Client \f1%s \f5(%i) \f7has modified the \f2map \f6\"%s\"\f7.", ci->name, ci->clientnum, smapname);
             sendf(req, 1, "ris", N_SERVMSG, msg);
             if(forceSpec)
             {
@@ -2865,7 +3199,7 @@ namespace server
             {
                 clientinfo *ci = clients[j];
                 if(ci->state.state==CS_SPECTATOR || ci->state.aitype != AI_NONE || !ci->clientmap[0] || ci->mapcrc != info.crc || (req < 0 && ci->warned) || ci->isspy) continue;
-                formatstring(msg)("%s has modified map \"%s\"", colorname(ci), smapname);
+                formatstring(msg)("\f0[INFO]\f7: \f7Client \f1%s \f5(%i) \f7has modified the \f2map \f6\"%s\"\f7.", ci->name, ci->clientnum, smapname);
                 sendf(req, 1, "ris", N_SERVMSG, msg);
                 if(forceSpec)
                 {
@@ -2884,6 +3218,7 @@ namespace server
 
     void noclients()
     {
+        gamemode = defaultgamemode;
         bannedips.shrink(0);
         aiman::clearai();
     }
@@ -3148,6 +3483,30 @@ namespace server
 
     VAR(autosendto, 0, 0, 1);
 
+    stream *omapdata = NULL;
+
+    void loadmap()
+    {
+        //if(!m_edit || !racemode) return;
+        if(omapdata) DELETEP(omapdata);
+        defformatstring(mapfile)("packages/base/%s.ogz", smapname);
+        omapdata = openrawfile(mapfile, "rb");
+        if(!omapdata) return;
+        if(autosendto)
+        {
+            loopvj(clients)
+            {
+                clientinfo *cx = clients[j];
+                if(!cx) continue;
+                if(!omapdata || cx->getmap) continue;
+                if((cx->getmap = sendfile(cx->clientnum, 2, omapdata, "ri", N_SENDMAP)))
+                    cx->getmap->freeCallback = freegetmap;
+                cx->needclipboard = totalmillis ? totalmillis : 1;
+            }
+        }
+        mapdata = omapdata;
+    }
+
     void receivefile(int sender, uchar *data, int len)
     {
         if(!m_edit || len > 8*1024*1024) return;
@@ -3165,7 +3524,7 @@ namespace server
             {
                 clientinfo *cx = clients[j];
                 if(!cx || cx->ownernum == ci->ownernum) continue;
-                if(!mapdata || cx->getmap) return;
+                if(!mapdata || cx->getmap) continue;
                 sendservmsgf("\f0[INFO]\f7: Automatically delivering the \f1map\f7 to \f2%s\f7.", colorname(cx));
                 if((cx->getmap = sendfile(cx->clientnum, 2, mapdata, "ri", N_SENDMAP)))
                     cx->getmap->freeCallback = freegetmap;
@@ -3343,6 +3702,7 @@ namespace server
         ci->mute = false;
         ci->emute = false;
         ci->nmute = false;
+        ci->islooser = false;
 
         if(ci->isspy)
         {
@@ -3361,6 +3721,7 @@ namespace server
 
         ci->state.stolen = 0;
         ci->state.returned = 0;
+        ci->spectimes = 0;
 
 #ifndef WIN32
         int i = is_mod_loaded("geolocation");
@@ -3929,6 +4290,21 @@ namespace server
         explodeString(args, array, ' ', 3);
         if(!array[0]) { sendmsg(ci, "Usage: #emute <cn> [0/1]"); return; }
         int cn = atoi(array[0]);
+        if(cn == -1)
+        {
+            loopv(clients)
+            {
+                clientinfo *cx = clients[i];
+                if(array[1])
+                {
+                    int a = atoi(array[1]);
+                    cx->emute = (a!=0);
+                }
+                else cx->emute = revbool(cx->emute);
+                sendmsgf(ci, "%s has been edit-%smuted.", colorname(cx), cx->emute?"":"un");
+                sendmsgf(cx, "you have been edit-%smuted.", cx->emute?"":"un");
+            }
+        }
         clientinfo *cx = getinfo(cn);
         if(!cx) return;
         if(array[1])
@@ -3989,10 +4365,13 @@ namespace server
             privname(priv == PRIV_NONE ? ci->privilege : priv)
         );
         bool val = priv == PRIV_NONE;
-        if(hidepriv && priv > PRIV_AUTH)
+        if((hidepriv && priv > PRIV_AUTH) || ci->isspy)
         {
             sendmsg(ci, msg);
-            loopv(clients) if(((val && clients[i]->privilege >= priv) || (!val && clients[i]->privilege >= PRIV_ADMIN)) && clients[i] != ci) sendmsg(clients[i], msg);
+            if(!ci->isspy)
+            {
+                loopv(clients) if(((val && clients[i]->privilege >= priv) || (!val && clients[i]->privilege >= PRIV_ADMIN)) && clients[i] != ci) sendmsg(clients[i], msg);
+            }
         }
         else
         {
@@ -4267,6 +4646,7 @@ namespace server
     })
 
     servcmd(intermission, PRIV_AUTH, "", "Starts the intermission.", {
+        if(racemode) execute("clearsleep");
         startintermission();
         sendservmsgf("\f0[INFO]\f7: \f1%s \f7has \f3forced \f7the intermission.", colorname(ci));
     })
@@ -4329,7 +4709,7 @@ namespace server
 
     servcmd(achat, PRIV_ADMIN, "<message>", "Sends a message to the admins-only chat.", {
         if(!args || !*args) { sendmsg(ci, "usage: #achat <message>"); return; }
-        loopv(clients) if(clients[i]->privilege >= PRIV_ADMIN) sendmsgf(clients[i], "\f0[ADMINS-CHAT]\f7: \f1%s\f7: \f2%s", colorname(ci), args);
+        loopv(clients) if(clients[i]->privilege >= PRIV_ADMIN) sendmsgf(clients[i], "\f0[ADMINS-CHAT]\f7: \f1%s\f7: \f6%s", colorname(ci), args);
     })
 
     servcmd(ban, PRIV_ADMIN, "<cn> <time in minutes> [reason]", "kicks and bans a client with the specified ban duration.", {
@@ -4387,6 +4767,27 @@ namespace server
         }
     })
 
+    servcmd(rpban24, PRIV_ADMIN, "<ip (e.g. 123.123.123)> [reason]", "permamently bans a /24 IP range.", {
+        char * Array[2];
+        explodeString(args, Array, ' ', 2);
+        if(!Array[0]) { sendmsg(ci, "usage: #rpban24 <ip (e.g. 123.123.123)> [reason]"); return; }
+        else addrpban24(Array[0], Array[1]?:"Unknown");
+    })
+
+    servcmd(rpban16, PRIV_ADMIN, "<ip (e.g. 123.123)> [reason]", "permamently bans a /16 IP range.", {
+        char * Array[2];
+        explodeString(args, Array, ' ', 2);
+        if(!Array[0]) { sendmsg(ci, "usage: #rpban16 <ip (e.g. 123.123)> [reason]"); return; }
+        else addrpban16(Array[0], Array[1]?:"Unknown");
+    })
+
+    servcmd(rpban8, PRIV_ADMIN, "<ip (e.g. 123)> [reason]", "permamently bans a /8 IP range.", {
+        char * Array[2];
+        explodeString(args, Array, ' ', 2);
+        if(!Array[0]) { sendmsg(ci, "usage: #rpban8 <ip (e.g. 123)> [reason]"); return; }
+        else addrpban8(Array[0], Array[1]?:"Unknown");
+    })
+
     servcmd(unpban, PRIV_ADMIN, "<id>", "unbans a permamenlty banned client.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
@@ -4397,16 +4798,89 @@ namespace server
         sendmsgf(ci, "\f0[INFO]\f7: The \f3PBan \f7with the \f1ID \f2%i \f7has been %ssuccsessfully \f7removed.", j, removed ? "\f0" : "\f6un");
     })
 
+    servcmd(unrpban, PRIV_ADMIN, "<id>", "unbans a permamently banned range.", {
+        char*array[2];
+        explodeString(args, array, ' ', 2);
+        if(!array[0]) { sendmsg(ci, "usage: #unrpban <id>. You can find the ids of the pbanned clients with #listpbans."); return; }
+        int j = atoi(array[0]);
+        bool removed = true;
+        int x = 1;
+        loopv(pbans) if(!pbans[i].hide) x++;
+        string ip_range;
+        int type = 0;
+        loopv(rpbans) if(i==(j-x)) { type = rpbans[i].type; copystring(ip_range, (const char *)rpbans[i].Range); removed = true; rpbans.remove(i); }
+        switch(type)
+        {
+            case 24:
+                for(int i = 0; i < 255; i++)
+                {
+                    defformatstring(curaddr)("%s.%i", ip_range, i);
+                    loopv(pbans) if(!strcmp((const char *)pbans[i].IP, (const char *)curaddr)) pbans.remove(i);
+                }
+                break;
+            case 16:
+                for(int i = 0; i < 255; i++)
+                {
+                    for(int j = 0; j < 255; j++)
+                    {
+                        defformatstring(curaddr)("%s.%i.%i", ip_range, i, j);
+                        loopv(pbans) if(!strcmp((const char *)pbans[i].IP, (const char *)curaddr)) pbans.remove(i);
+                    }
+                }
+                break;
+            case 8:
+                for(int i = 0; i < 255; i++)
+                {
+                    for(int j = 0; j < 255; j++)
+                    {
+                        for(int z = 0; z < 255; z++)
+                        {
+                            defformatstring(curaddr)("%s.%i.%i.%i", ip_range, i, j, z);
+                            loopv(pbans) if(!strcmp((const char *)pbans[i].IP, (const char *)curaddr)) pbans.remove(i);
+                        }
+                    }
+                }
+                break;
+        }
+        sendmsgf(ci, "\f0[INFO]\f7: The \f3RPBan \f7with the \f1ID \f2%i \f7has been %ssuccsessfully \f7removed.", j, removed ? "\f0" : "\f6un");
+    })
+
     servcmd(listpbans, PRIV_ADMIN, "", "lists all permemently banned clients.", {
         bool nopbans = true;
+        int id = 1;
         loopv(pbans)
         {
+            if(pbans[i].hide) continue;
             sendmsgf(ci, "\f0[INFO]\f7: \f1ID \f2%i\f7, \f6IP-Address: \f3%s\f7, \f5Reason: \f7%s.", 
-                i+1,
+                id,
                 pbans[i].IP,
                 pbans[i].Reason[0]?pbans[i].Reason:"Unknown"
             );
             nopbans = false;
+            id++;
+        }
+        loopv(rpbans)
+        {
+            string range;
+            switch(rpbans[i].type)
+            {
+                case 24:
+                    formatstring(range)("%s.0/24", rpbans[i].Range);
+                    break;
+                case 16:
+                    formatstring(range)("%s.0.0/16", rpbans[i].Range);
+                    break;
+                case 8:
+                    formatstring(range)("%s.0.0.0/8", rpbans[i].Range);
+                    break;
+            }
+            sendmsgf(ci, "\f0[INFO]\f7: \f1ID \f2%i\f7, \f6Range: \f3%s\f7, \f5Reason: \f7%s.",
+                id,
+                range,
+                rpbans[i].Reason?rpbans[i].Reason:"Unknown"
+            );
+            nopbans = false;
+            id++;
         }
         if(nopbans)
             sendmsg(ci, "\f0[INFO]\f7: \f2At the moment\f7, there are no \f3PBans\f7.");
@@ -4467,7 +4941,7 @@ namespace server
             }
             aiman::removeai(ci);
             ci->forcespec = true;
-            if(ci->privilege >= PRIV_MASTER && (ci->privilege <= PRIV_AUTH || !hidepriv))
+            if(!hidepriv)
             {
                 packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
                 defformatstring(tmp)("%s relinquished %s", colorname(ci), privname(ci->privilege));
@@ -4574,6 +5048,33 @@ namespace server
         ci->isspy = newvalue;
     })
 
+    ICOMMAND(wall, "s", (const char *s), {
+        if(!s||!*s) return;
+        sendservmsg(s);
+    })
+
+    servcmd(racemode, PRIV_ADMIN, "[0/1]", "Toggles race mode", {
+        char*array[2];
+        explodeString(args, array, ' ', 2);
+        if(!array[0]) racemode = revbool(racemode);
+        else
+        {
+            int a = atoi(array[0]);
+            racemode = (a!=0);
+        }
+        sendservmsgf("\f0[INFO]\f7: Race mode has been %sabled.", racemode?"en":"dis");
+        if(racemode)
+        {
+            execute("lrinitialize");
+            curlr = 0;
+            loopv(clients)
+            {
+                clients[i]->emute = true;
+            }
+        }
+        else execute("lruninitialize");
+    })
+
     servcmd(halt, PRIV_OWNER, "", "Closes the server.", {
         quit = true;
     })
@@ -4658,6 +5159,18 @@ namespace server
         addpban(ip, reason);
     });
 
+    ICOMMAND(pbanr24, "ss", (const char *range, const char *reason), {
+        addrpban24(range, reason);
+    })
+
+    ICOMMAND(pbanr16, "ss", (const char *range, const char *reason), {
+        addrpban16(range, reason);
+    })
+
+    ICOMMAND(pbanr8, "ss", (const char *range, const char *reason), {
+        addrpban24(range, reason);
+    })
+
     void close()
     {
         stream *f = openutf8file("pban.cfg", "w");
@@ -4665,7 +5178,8 @@ namespace server
         {
             f->printf("// Automatically generated by SM-Server - do not edit.\n");
             f->printf("// Contains a list of permamently banned clients.\n");
-            loopv(pbans) f->printf("pban %s %s\n", pbans[i].IP, pbans[i].Reason);
+            loopv(pbans) if(!pbans[i].hide) f->printf("pban %s \"%s\"\n", pbans[i].IP, pbans[i].Reason);
+            loopv(rpbans) f->printf("pbanr%i %s \"%s\"\n", rpbans[i].type, rpbans[i].Range, rpbans[i].Reason);
             delete f;
         }
         stream *ff = openutf8file("flagruns.cfg", "w");
@@ -4682,6 +5196,52 @@ namespace server
 #define addext(name, function) addextn(name, __gfunc_##name, function)
 
     addext(sendservmsgf, sendservmsgf)
+
+    ICOMMAND(fspec, "ii", (int *value, int *cn), {
+        if(!value || !cn) return;
+        clientinfo *cx = getinfo(*cn);
+        if(!cx) return;
+        if(*value == 1)
+        {
+            cx->forcespec = true;
+            if(cx->state.state==CS_ALIVE) suicide(cx);
+            if(smode) smode->leavegame(cx);
+            cx->state.state = CS_SPECTATOR;
+            cx->state.timeplayed += lastmillis - cx->state.lasttimeplayed;
+            if(!cx->local && !cx->privilege) aiman::removeai(cx);
+            sendf(-1, 1, "ri3", N_SPECTATOR, *cn, 1);
+        }
+        else
+        {
+            cx->forcespec = false;
+            cx->state.state = CS_DEAD;
+            cx->state.respawn();
+            cx->state.lasttimeplayed = lastmillis;
+            aiman::addclient(cx);
+            if(cx->clientmap[0] || cx->mapcrc) checkmaps();
+            sendf(-1, 1, "ri3", N_SPECTATOR, *cn, 0);  
+        }
+    })
+
+    void spec5sec(clientinfo *ci)
+    {
+        if(!ci) return;
+        string command;
+        if(ci->spectimes >= 2)
+        {
+            formatstring(command)("fspec 1 %i", ci->clientnum);
+            sendservmsgf("\f0[RACE-INFO]\f7: \f1%s \f5(%i) \f7has been spectated for the \f2entire race\f7 (\f3caught cheating \f13 \f3times\f7).", ci->name, ci->clientnum);
+            execute(command);
+        }
+        else
+        {
+            if(ci->spectimes == 1) ci->islooser = true;
+            sendservmsgf("\f0[RACE-INFO]\f7: \f1%s \f5(%i) \f7has been spectated for \f15 \f7seconds (\f3caught cheating\f7).", ci->name, ci->clientnum);
+            formatstring(command)("c%i = [fspec 1 %i; sleep 5000 [fspec 0 %i]]; c%i", ci->clientnum, ci->clientnum, ci->clientnum, ci->clientnum);
+            execute(command);
+            ci->spectimes++;
+        }
+    }
 
     void parsepacket(int sender, int chan, packetbuf &p)     // has to parse exactly each byte of the packet
     {
@@ -4724,14 +5284,15 @@ namespace server
                     }
                     if(m_edit && autosendto)
                     {
-                        loopvj(clients)
-                        {
-                            if(!mapdata || ci->getmap) return;
-                            sendservmsgf("\f0[INFO]\f7: Automatically delivering the \f1map\f7 to \f2%s\f7.", colorname(ci));
-                            if((ci->getmap = sendfile(ci->clientnum, 2, mapdata, "ri", N_SENDMAP)))
-                                ci->getmap->freeCallback = freegetmap;
-                            ci->needclipboard = totalmillis ? totalmillis : 1;
-                        }
+                        if(!mapdata || ci->getmap) return;
+                        sendservmsgf("\f0[INFO]\f7: Automatically delivering the \f1map\f7 to \f2%s\f7.", colorname(ci));
+                        if((ci->getmap = sendfile(ci->clientnum, 2, mapdata, "ri", N_SENDMAP)))
+                            ci->getmap->freeCallback = freegetmap;
+                        ci->needclipboard = totalmillis ? totalmillis : 1;
+                    }
+                    if(m_edit && racemode)
+                    {
+                        ci->emute = true;
                     }
                     break;
                 }
@@ -4863,8 +5424,8 @@ namespace server
             {
                 int val = getint(p);
                 if(!ci->local && !m_edit) { ac(ci, EDITMODE); return; };
-                if(ci->emute) return;
                 if(val ? ci->state.state!=CS_ALIVE && ci->state.state!=CS_DEAD : ci->state.state!=CS_EDITING) break;
+                if(racemode) { spec5sec(ci); }
                 if(smode)
                 {
                     if(val) smode->leavegame(ci);
@@ -5025,7 +5586,7 @@ namespace server
                 getstring(text, p);
                 if(text[0] == '#')
                 {
-                    parsecommand (&text[1], cq);
+                    parsecommand(&text[1], cq);
                     return;
                 }
                 filtertext(text, text);
@@ -5268,8 +5829,7 @@ namespace server
             case N_SPECTATOR:
             {
                 int spectator = getint(p), val = getint(p);
-                if(!ci->privilege && !ci->local && (spectator!=sender || (ci->state.state==CS_SPECTATOR && mastermode>=MM_LOCKED))) break;
-                if(ci->forcespec && ci->state.state==CS_SPECTATOR) break;
+                if(!ci->privilege && !ci->local && (spectator!=sender || (ci->state.state==CS_SPECTATOR && (mastermode>=MM_LOCKED || ci->forcespec)))) break;
                 clientinfo *spinfo = (clientinfo *)getclientinfo(spectator); // no bots
                 if(!spinfo || (spinfo->state.state==CS_SPECTATOR ? val : !val)) break;
 

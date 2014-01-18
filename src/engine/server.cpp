@@ -618,6 +618,8 @@ void updatetime()
     }
 }
 
+extern void checksleep(int);
+
 void serverslice(bool dedicated, uint timeout)   // main server update, called from main loop in sp, or from below in dedicated server
 {
     if(!serverhost) 
@@ -641,6 +643,7 @@ void serverslice(bool dedicated, uint timeout)   // main server update, called f
         lastmillis += curtime;
         totalmillis = millis;
         updatetime();
+        checksleep(totalmillis);
     }
     server::serverupdate();
 
