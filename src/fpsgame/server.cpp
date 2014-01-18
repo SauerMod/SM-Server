@@ -2553,7 +2553,7 @@ namespace server
             loadmap();
             sendservmsg("\f0[RACE-BOT]\f7: Waiting for all \f2clients \f7to get the map...");
             execute("c = [if (clientshavemap) [z = [if (> $i 0) [wall (concatword \"\f0[RACE-BOT]\f7: The \f2game \f7will \f0start \f7in \f1\" $i \" \f7second\f4(s)\f7!\"); sleep 1000 [i = (- $i 1); z]] [wall \"\f0[RACE-BOT]\f7: The \f2race \f7has \f0started\f7!\"; respawn_all]]; i = 5; z] [sleep 1 c]]; c");
-            execute("sleep 7250 [zz = [if (!= (checkplayerspos) -1) [wall (concatword \"\f0[RACE-BOT]\f7: \f1\" (getclientname (checkplayerspos)) \" \f7has \f0won \f7the \f2race!\"); if (isbestrace) [wall (concatword \"\f0[RACE-BOT]\f7: \f1\" (getclientname (checkplayerspos)) \" \f7has done a new \f3best \f2score \f7for this \f2race! \f1\" (raceseconds) \" \f2seconds\f7.\"); addbestrace (getclientname (checkplayerspos))] [wall (concatword \"\f0[RACE-BOT]\f7: \f3Best \f2time \f7for this \f1race: \f1\" (bestraceseconds) \" \f2seconds \f7by \" (bestracerunner)\"\f7.\")]; zz = []; zzz]; sleep 1 zz]; zz]");
+            execute("sleep 7250 [zz = [if (!= (checkplayerspos) -1) [wall (concatword \"\f0[RACE-BOT]\f7: \f1\" (getclientname (checkplayerspos)) \" \f7has \f0won \f7the \f2race!\"); if (isbestrace) [wall (concatword \"\f0[RACE-BOT]\f7: \f1\" (getclientname (checkplayerspos)) \" \f7has done a new \f3best \f2score \f7for this \f2race \f7(\f1\" (raceseconds) \" \f2seconds\f7)!\"); addbestrace (getclientname (checkplayerspos))] [wall (concatword \"\f0[RACE-BOT]\f7: \f3Best \f2time \f7for this \f1race: \f1\" (bestraceseconds) \" \f2seconds \f7by \" (bestracerunner)\"\f7.\")]; zz = []; zzz]; sleep 1 zz]; zz]");
             execute("sleep 7500 [zzzz = 20; zzz = [if (|| (|| (= $zzzz 20) (= $zzzz 10)) (<= $zzzz 5)) [wall (concatword \"\f0[RACE-BOT]\f7: \f0Starting \f7a \f6new \f2race \f7in \f6\" $zzzz \" \f2second\f4(s)\f7.\")]; sleep 1000 [zzzz = (- $zzzz 1); if (= $zzzz 0) [zzz = []; intermission] [zzz]]]");
         }
         else execute("z = []; zz = []; zzz = []; zzzz = [];");
@@ -5425,7 +5425,7 @@ namespace server
                 int val = getint(p);
                 if(!ci->local && !m_edit) { ac(ci, EDITMODE); return; };
                 if(val ? ci->state.state!=CS_ALIVE && ci->state.state!=CS_DEAD : ci->state.state!=CS_EDITING) break;
-                if(racemode) { spec5sec(ci); }
+                if(racemode) { spec5sec(ci); return; }
                 if(smode)
                 {
                     if(val) smode->leavegame(ci);
