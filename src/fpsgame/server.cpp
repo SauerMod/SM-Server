@@ -2485,10 +2485,13 @@ namespace server
     })
 
     ICOMMAND(addbestracen, "ssi", (const char *runner, const char *map, int millis), {
-        if(!strcmp(raceruns[i].map, map))
+        loopv(raceruns)
         {
-            if(raceruns[i].millis > millis) raceruns.remove(i);
-            else return;
+            if(!strcmp(raceruns[i].map, map))
+            {
+                if(raceruns[i].millis > millis) raceruns.remove(i);
+                else return;
+            }
         }
         racerun &cur = raceruns.add();
         copystring(cur.map, map);
