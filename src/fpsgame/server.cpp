@@ -1748,7 +1748,7 @@ namespace server
         bool needshide = true;
         if(val && authname) 
         {
-            if(authdesc && authdesc[0]) formatstring(msg)("\f0[INFO]\f7: Player \f1%s\f5(%i)\f7 claimed %s%s%s\f7 as \f5'\f2%s\f5' \f5{\f2%s\f5}",
+            if(authdesc && authdesc[0]) formatstring(msg)("\f0[INFO]\f7: Player \f1%s \f5(%i)\f7 claimed %s%s%s\f7 as \f5'\f2%s\f5' \f5{\f2%s\f5}",
                 ci->name,
                 ci->clientnum,
                 hidepriv ? "\f4invisible " : "",
@@ -1759,7 +1759,7 @@ namespace server
             );
             else
             {
-                formatstring(msg)("\f0[INFO]\f7: Player \f1%s\f5(%i)\f7 claimed %s%s\f7 as \f5'\f2%s\f5'",
+                formatstring(msg)("\f0[INFO]\f7: Player \f1%s \f5(%i)\f7 claimed %s%s\f7 as \f5'\f2%s\f5'",
                     ci->name,
                     ci->clientnum,
                     privcolor(ci->privilege),
@@ -1769,7 +1769,7 @@ namespace server
                 needshide = false;
             }
         } 
-        else formatstring(msg)("\f0[INFO]\f7: Player \f1%s\f5(%i) \f7%s %s%s%s",
+        else formatstring(msg)("\f0[INFO]\f7: Player \f1%s \f5(%i) \f7%s %s%s%s",
             ci->name,
             ci->clientnum,
             val ? "claimed" : "relinquished",
@@ -1869,13 +1869,13 @@ namespace server
                 string msg;
                 if(!ci->isspy || !hidepriv || ci->privilege < PRIV_AUTH)
                 {
-                    if(reason && reason[0]) formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s\f5(%i) \f7has been \f3kicked \f7by %s \f4because: \f0%s\f7.", vinfo->name, vinfo->clientnum, kicker, reason);
-                    else formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s\f5(%i) \f7has been \f3kicked \f7by %s\f7.", vinfo->name, vinfo->clientnum, kicker);
+                    if(reason && reason[0]) formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s \f5(%i) \f7has been \f3kicked \f7by %s \f4because: \f0%s\f7.", vinfo->name, vinfo->clientnum, kicker, reason);
+                    else formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s \f5(%i) \f7has been \f3kicked \f7by %s\f7.", vinfo->name, vinfo->clientnum, kicker);
                 }
                 else
                 {
-                    if(reason && reason[0]) formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s\f5(%i) \f7has been \f3kicked \f4because: \f0%s\f7.", vinfo->name, vinfo->clientnum, reason);
-                    else formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s\f5(%i) \f7has been\f7.", vinfo->name, vinfo->clientnum);
+                    if(reason && reason[0]) formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s \f5(%i) \f7has been \f3kicked \f4because: \f0%s\f7.", vinfo->name, vinfo->clientnum, reason);
+                    else formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s \f5(%i) \f7has been\f7.", vinfo->name, vinfo->clientnum);
                 }
                 sendservmsg(msg);
                 uint ip = getclientip(victim);
@@ -2547,7 +2547,7 @@ namespace server
 
         if(racemode && m_edit)
         {
-            loopv(clients) { clients[i]->islooser = false; clients[i]->spectimes = 0; }
+            loopv(clients) { clients[i]->islooser = false; if(clients[i]->spectimes == 2) clients[i]->forcespec = false; clients[i]->spectimes = 0; }
             execute("clearsleep");
             sendservmsg("\f0[RACE-BOT]\f7: Delivering the \f3map\f7...");
             loadmap();
