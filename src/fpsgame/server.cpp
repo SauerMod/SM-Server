@@ -2466,7 +2466,8 @@ namespace server
         {
             if(!strcmp((const char *)raceruns[i].map, smapname))
             {
-                if(raceruns[i].millis > (gamemillis - 5000)) intret(0);
+                if(raceruns[i].millis > (gamemillis - 5000)) intret(1);
+                else intret(0);
                 return;
             }
         }
@@ -2488,19 +2489,19 @@ namespace server
         cur.millis = (gamemillis - 5000);
     })
 
-    ICOMMAND(addbestracen, "ssi", (const char *runner, const char *map, int millis), {
+    ICOMMAND(addbestracen, "ssi", (const char *runner, const char *map, int *millis), {
         loopv(raceruns)
         {
             if(!strcmp(raceruns[i].map, map))
             {
-                if(raceruns[i].millis > millis) raceruns.remove(i);
+                if(raceruns[i].millis > *millis) raceruns.remove(i);
                 else return;
             }
         }
         racerun &cur = raceruns.add();
         copystring(cur.map, map);
         copystring(cur.name, runner);
-        cur.millis = millis;
+        cur.millis = *millis;
     })
 
     void loadmap();
@@ -2571,9 +2572,9 @@ namespace server
             sendservmsg("\f0[RACE-BOT]\f7: Delivering the \f3map\f7...");
             loadmap();
             sendservmsg("\f0[RACE-BOT]\f7: Waiting for all \f2clients \f7to get the map...");
-            execute("c = [if (clientshavemap) [z = [if (> $i 0) [wall (concatword \"\f0[RACE-BOT]\f7: The \f2game \f7will \f0start \f7in \f1\" $i \" \f7second\f4(s)\f7!\"); sleep 1000 [i = (- $i 1); z]] [wall \"\f0[RACE-BOT]\f7: The \f2race \f7has \f0started\f7!\"; respawn_all]]; i = 5; z] [sleep 1 c]]; c");
-            execute("zz = [if (clientshavemap) [if (!= (checkplayerspos) -1) [wall (concatword \"\f0[RACE-BOT]\f7: \f1\" (getclientname (checkplayerspos)) \" \f7has \f0won \f7the \f2race!\"); if (isbestrace) [wall (concatword \"\f0[RACE-BOT]\f7: \f1\" (getclientname (checkplayerspos)) \" \f7has done a new \f3best \f2score \f7for this \f2race \f7(\f1\" (raceseconds) \" \f2seconds\f7)!\"); addbestrace (getclientname (checkplayerspos))] [wall (concatword \"\f0[RACE-BOT]\f7: \f3Best \f2time \f7for this \f1race: \f1\" (bestraceseconds) \" \f2seconds \f7by \" (bestracerunner)\"\f7.\")]; zz = []; zzz]]; sleep 1 zz]; zz");
-            execute("zzzz = 20; zzz = [if (|| (|| (= $zzzz 20) (= $zzzz 10)) (<= $zzzz 5)) [wall (concatword \"\f0[RACE-BOT]\f7: \f0Starting \f7a \f6new \f2race \f7in \f6\" $zzzz \" \f2second\f4(s)\f7.\")]; sleep 1000 [zzzz = (- $zzzz 1); if (= $zzzz 0) [zzz = []; intermission] [zzz]]]");
+            execute("cc = 0; c = [if (clientshavemap) [z = [if (> $i 0) [wall (concatword \"\f0[RACE-BOT]\f7: The \f2game \f7will \f0start \f7in \f1\" $i \" \f7second\f4(s)\f7!\"); sleep 1000 [i = (- $i 1); z]] [wall \"\f0[RACE-BOT]\f7: The \f2race \f7has \f0started\f7!\"; respawn_all]]; i = 5; z; cc = 1] [sleep 1 c]]; c");
+            execute("cccc = 0; ccc = [if (= $cc 1) [zz = [if (!= (checkplayerspos) -1) [wall (concatword \"\f0[RACE-BOT]\f7: \f1\" (getclientname (checkplayerspos)) \" \f7has \f0won \f7the \f2race!\"); if (isbestrace) [wall (concatword \"\f0[RACE-BOT]\f7: \f1\" (getclientname (checkplayerspos)) \" \f7has done a new \f3best \f2score \f7for this \f2race \f7(\f1\" (raceseconds) \" \f2seconds\f7)!\"); addbestrace (getclientname (checkplayerspos))] [wall (concatword \"\f0[RACE-BOT]\f7: \f3Best \f2time \f7for this \f1race: \f1\" (bestraceseconds) \" \f2seconds \f7by \" (bestracerunner)\"\f7.\"); wall (concatword \"\f0[RACE-BOT]\f7: \f1\" (getclientname (checkplayerpos)) \"\f7's \f2time\f4: \f0\" (bestraceseconds) \"f7!\")]; zz = []; zzz]; sleep 1 zz]; zz; cccc = 1] [sleep 1 ccc]]; ccc");
+            execute("ccccc = [if (= $cccc 1) [zzzz = 20; zzz = [if (|| (|| (= $zzzz 20) (= $zzzz 10)) (<= $zzzz 5)) [wall (concatword \"\f0[RACE-BOT]\f7: \f0Starting \f7a \f6new \f2race \f7in \f6\" $zzzz \" \f2second\f4(s)\f7.\")]; sleep 1000 [zzzz = (- $zzzz 1); if (= $zzzz 0) [zzz = []; intermission] [zzz]]]] [sleep 1 ccccc]]; ccccc");
         }
         else execute("z = []; zz = []; zzz = []; zzzz = [];");
     }

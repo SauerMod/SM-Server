@@ -45,6 +45,7 @@ Current features:
 	+ Spy system.
 	+ Permament bans system.
 	+ Owner privilege level.
+	+ Server-side race bot.
 	+ Modules system
 	  -> Geolocation module         -> A un-/re-/loadable module to show client's geolocation on connect.
 
