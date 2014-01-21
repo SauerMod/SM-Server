@@ -2490,14 +2490,6 @@ namespace server
     })
 
     ICOMMAND(addbestracen, "ssi", (const char *runner, const char *map, int *millis), {
-        loopv(raceruns)
-        {
-            if(!strcmp(raceruns[i].map, map))
-            {
-                if(raceruns[i].millis > *millis) raceruns.remove(i);
-                else return;
-            }
-        }
         racerun &cur = raceruns.add();
         copystring(cur.map, map);
         copystring(cur.name, runner);
@@ -2572,17 +2564,17 @@ namespace server
             sendservmsg("\f0[RACE-BOT]\f7: Delivering the \f3map\f7...");
             loadmap();
             sendservmsg("\f0[RACE-BOT]\f7: Waiting for all \f2clients \f7to get the map...");
-            execute("cc = 0; c = [if (clientshavemap) [z = [if (> $i 0) [wall (concatword \"\f0[RACE-BOT]\f7: The \f2game \f7will \f0start \f7in \f1\" $i \" \f7second\f4(s)\f7!\"); sleep 1000 [i = (- $i 1); z]] [wall \"\f0[RACE-BOT]\f7: The \f2race \f7has \f0started\f7!\"; respawn_all]]; i = 5; z; cc = 1] [sleep 1 c]]; c");
-            execute("cccc = 0; ccc = [if (= $cc 1) [zz = [if (!= (checkplayerspos) -1) [wall (concatword \"\f0[RACE-BOT]\f7: \f1\" (getclientname (checkplayerspos)) \" \f7has \f0won \f7the \f2race!\"); if (isbestrace) [wall (concatword \"\f0[RACE-BOT]\f7: \f1\" (getclientname (checkplayerspos)) \" \f7has done a new \f3best \f2score \f7for this \f2race \f7(\f1\" (raceseconds) \" \f2seconds\f7)!\"); addbestrace (getclientname (checkplayerspos))] [wall (concatword \"\f0[RACE-BOT]\f7: \f3Best \f2time \f7for this \f1race: \f1\" (bestraceseconds) \" \f2seconds \f7by \" (bestracerunner)\"\f7.\"); wall (concatword \"\f0[RACE-BOT]\f7: \f1\" (getclientname (checkplayerpos)) \"\f7's \f2time\f4: \f0\" (bestraceseconds) \"f7!\")]; zz = []; zzz]; sleep 1 zz]; zz; cccc = 1] [sleep 1 ccc]]; ccc");
-            execute("ccccc = [if (= $cccc 1) [zzzz = 20; zzz = [if (|| (|| (= $zzzz 20) (= $zzzz 10)) (<= $zzzz 5)) [wall (concatword \"\f0[RACE-BOT]\f7: \f0Starting \f7a \f6new \f2race \f7in \f6\" $zzzz \" \f2second\f4(s)\f7.\")]; sleep 1000 [zzzz = (- $zzzz 1); if (= $zzzz 0) [zzz = []; intermission] [zzz]]]] [sleep 1 ccccc]]; ccccc");
+            execfile("racebot.cfg", false);
         }
         else execute("z = []; zz = []; zzz = []; zzzz = [];");
     }
 
+    // Some small scripting improvements ~>
+
     ICOMMAND(getplayerposx, "i", (int *cn), {
         loopv(clients) if(clients[i]->clientnum == *cn)
         {
-            intret((int)clients[i]->state.o.x);
+            floatret(clients[i]->state.o.x);
             return;
         }
         intret(0);
@@ -2591,7 +2583,7 @@ namespace server
     ICOMMAND(getplayerposy, "i", (int *cn), {
         loopv(clients) if(clients[i]->clientnum == *cn)
         {
-            intret((int)clients[i]->state.o.y);
+            floatret(clients[i]->state.o.y);
             return;
         }
         intret(0);
@@ -2600,11 +2592,13 @@ namespace server
     ICOMMAND(getplayerposz, "i", (int *cn), {
         loopv(clients) if(clients[i]->clientnum == *cn)
         {
-            intret((int)clients[i]->state.o.z);
+            floatret(clients[i]->state.o.z);
             return;
         }
         intret(0);
     });
+
+    // <~ EOSI
 
     struct lrend
     {
@@ -3718,12 +3712,6 @@ namespace server
 
         if(servermotd[0]) sendf(ci->clientnum, 1, "ris", N_SERVMSG, servermotd);
 
-        ci->forcespec = false;
-        ci->mute = false;
-        ci->emute = false;
-        ci->nmute = false;
-        ci->islooser = false;
-
         if(ci->isspy)
         {
             packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
@@ -3736,12 +3724,6 @@ namespace server
             aiman::addclient(ci);
             sendf(-1, 1, "riii", N_SPECTATOR, ci->clientnum, 0);
         }
-
-        ci->isspy = false;
-
-        ci->state.stolen = 0;
-        ci->state.returned = 0;
-        ci->spectimes = 0;
 
 #ifndef WIN32
         int i = is_mod_loaded("geolocation");
@@ -5318,6 +5300,15 @@ namespace server
                             ci->getmap->freeCallback = freegetmap;
                         ci->needclipboard = totalmillis ? totalmillis : 1;
                     }
+                    ci->forcespec = false;
+                    ci->mute = false;
+                    ci->emute = false;
+                    ci->nmute = false;
+                    ci->islooser = false;
+                    ci->isspy = false;
+                    ci->state.stolen = 0;
+                    ci->state.returned = 0;
+                    ci->spectimes = 0;
                     if(m_edit && racemode)
                     {
                         ci->emute = true;
