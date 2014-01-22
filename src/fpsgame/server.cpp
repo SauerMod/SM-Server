@@ -3735,6 +3735,27 @@ namespace server
             modules[i].function(z);
         }
 #endif
+        if(m_edit && autosendto)
+        {
+            if(!mapdata || ci->getmap) return;
+            sendservmsgf("\f0[INFO]\f7: Automatically delivering the \f1map\f7 to \f2%s\f7.", colorname(ci));
+            if((ci->getmap = sendfile(ci->clientnum, 2, mapdata, "ri", N_SENDMAP)))
+                ci->getmap->freeCallback = freegetmap;
+            ci->needclipboard = totalmillis ? totalmillis : 1;
+        }
+        ci->forcespec = false;
+        ci->mute = false;
+        ci->emute = false;
+        ci->nmute = false;
+        ci->islooser = false;
+        ci->isspy = false;
+        ci->state.stolen = 0;
+        ci->state.returned = 0;
+        ci->spectimes = 0;
+        if(m_edit && racemode)
+        {
+            ci->emute = true;
+        }
     }
 
     VARP(Debug, 0, 1, 1); // enables debug features.
@@ -5291,27 +5312,6 @@ namespace server
                     {
                         if(!ispban(getclienthostname(ci->clientnum))) connected(ci);
                         else { disconnect_client(sender, DISC_IPBAN); return; }
-                    }
-                    if(m_edit && autosendto)
-                    {
-                        if(!mapdata || ci->getmap) return;
-                        sendservmsgf("\f0[INFO]\f7: Automatically delivering the \f1map\f7 to \f2%s\f7.", colorname(ci));
-                        if((ci->getmap = sendfile(ci->clientnum, 2, mapdata, "ri", N_SENDMAP)))
-                            ci->getmap->freeCallback = freegetmap;
-                        ci->needclipboard = totalmillis ? totalmillis : 1;
-                    }
-                    ci->forcespec = false;
-                    ci->mute = false;
-                    ci->emute = false;
-                    ci->nmute = false;
-                    ci->islooser = false;
-                    ci->isspy = false;
-                    ci->state.stolen = 0;
-                    ci->state.returned = 0;
-                    ci->spectimes = 0;
-                    if(m_edit && racemode)
-                    {
-                        ci->emute = true;
                     }
                     break;
                 }

@@ -1,5 +1,8 @@
 Changelog
 =========
+0.3.2:
+	* Bugfixed racebot.
+	* Fixed crash.
 0.3.1:
 	* Racebot fixes.
 	* Some other changes.
