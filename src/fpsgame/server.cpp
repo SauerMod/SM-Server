@@ -3497,28 +3497,25 @@ namespace server
 
     VAR(autosendto, 0, 0, 1);
 
-    stream *omapdata = NULL;
-
     void loadmap()
     {
         //if(!m_edit || !racemode) return;
-        if(omapdata) DELETEP(omapdata);
         defformatstring(mapfile)("packages/base/%s.ogz", smapname);
-        omapdata = openrawfile(mapfile, "rb");
-        if(!omapdata) return;
+        stream *nmapdata = openrawfile(mapfile, "rb");
+        if(!nmapdata) return;
+        DELETEP(mapdata);
+        mapdata = nmapdata;
         if(autosendto)
         {
-            loopvj(clients)
+            loopv(clients)
             {
-                clientinfo *cx = clients[j];
-                if(!cx) continue;
-                if(!omapdata || cx->getmap) continue;
-                if((cx->getmap = sendfile(cx->clientnum, 2, omapdata, "ri", N_SENDMAP)))
-                    cx->getmap->freeCallback = freegetmap;
-                cx->needclipboard = totalmillis ? totalmillis : 1;
+                clientinfo *ci = clients[i];
+                if(ci->state.aitype!=AI_NONE || ci->getmap) continue;
+                if((ci->getmap = sendfile(ci->clientnum, 2, mapdata, "ri", N_SENDMAP)))
+                    ci->getmap->freeCallback = freegetmap;
+                ci->needclipboard = totalmillis ? totalmillis : 1;
             }
         }
-        mapdata = omapdata;
     }
 
     void receivefile(int sender, uchar *data, int len)
@@ -3735,13 +3732,11 @@ namespace server
             modules[i].function(z);
         }
 #endif
-        if(m_edit && autosendto)
+        if(m_edit && autosendto && mapdata && !ci->getmap)
         {
-            if(!mapdata || ci->getmap) return;
             sendservmsgf("\f0[INFO]\f7: Automatically delivering the \f1map\f7 to \f2%s\f7.", colorname(ci));
-            if((ci->getmap = sendfile(ci->clientnum, 2, mapdata, "ri", N_SENDMAP)))
+            if((ci->getmap = sendfile(ci->clientnum, 2, mapdata, "i", N_SENDMAP)))
                 ci->getmap->freeCallback = freegetmap;
-            ci->needclipboard = totalmillis ? totalmillis : 1;
         }
         ci->forcespec = false;
         ci->mute = false;

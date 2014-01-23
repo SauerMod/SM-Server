@@ -1025,7 +1025,7 @@ namespace server
 # include <signal.h>
 # define signalfunc(name, func) void signal##name(int signum) \
     { func; }
-    signalfunc(SegmentViolation, {
+    /*signalfunc(SegmentViolation, {
         char * i [6];
         i[0] = (char*)"1025";
         i[1] = (char*)"engine/server.cpp";
@@ -1041,7 +1041,7 @@ namespace server
             delclient(clients[i]);
         }
         exit(1);
-    });
+    });*/
     signalfunc(Reload, { execfile("server-init.cfg", false); execfile("pban.cfg", false); execfile("flagruns.cfg", false); });
     signalfunc(Quit, { server::quit = true; });
 #endif
@@ -1053,7 +1053,7 @@ void rundedicatedserver()
 #ifdef WIN32
     SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 #else
-    signal(SIGSEGV, signalSegmentViolation);
+    //signal(SIGSEGV, signalSegmentViolation);
     signal(SIGUSR1, signalReload);
     signal(SIGTERM, signalQuit);
     signal(SIGINT , signalQuit);
