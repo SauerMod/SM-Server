@@ -3751,6 +3751,7 @@ namespace server
         {
             ci->emute = true;
         }
+        if(ci->state.state==CS_SPECTATOR) sendf(-1, 1, "riii", N_SPECTATOR, ci->clientnum, 1);
     }
 
     VARP(Debug, 0, 1, 1); // enables debug features.
