@@ -1042,7 +1042,7 @@ namespace server
         }
         exit(1);
     });*/
-    signalfunc(Reload, { execfile("server-init.cfg", false); execfile("pban.cfg", false); execfile("flagruns.cfg", false); });
+    signalfunc(Reload, { execfile("server-init.cfg", false); execfile("pban.cfg", false); execfile("flagruns.cfg", false); execfile("race.cfg", false); });
     signalfunc(Quit, { server::quit = true; });
 #endif
 
@@ -1141,6 +1141,7 @@ void initserver(bool listen, bool dedicated)
     execfile("server-init.cfg", false);
     execfile("pban.cfg", false);
     execfile("flagruns.cfg", false);
+    execfile("race.cfg", false);
 
     if(listen) 
     {
