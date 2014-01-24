@@ -1873,7 +1873,7 @@ namespace server
                 string msg;
                 if(!ci->isspy || !hidepriv || ci->privilege < PRIV_AUTH)
                 {
-                    if(reason && reason[0]) formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s \f5(%i) \f7has been \f3kicked \f7by %s \f4because: \f0%s\f7.", vinfo->name, vinfo->clientnum, kicker, reason);
+                    if(reason && reason[0]) formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s \f5(%i) \f7has been \f3kicked \f7by \f0%s \f4because: \f0%s\f7.", vinfo->name, vinfo->clientnum, kicker, reason);
                     else formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s \f5(%i) \f7has been \f3kicked \f7by %s\f7.", vinfo->name, vinfo->clientnum, kicker);
                 }
                 else
@@ -2429,7 +2429,7 @@ namespace server
     {
         string map;
         string name;
-        int millis;
+        unsigned long long millis;
     };
     vector<racerun> raceruns;
 
@@ -2466,7 +2466,7 @@ namespace server
         {
             if(!strcmp((const char *)raceruns[i].map, smapname))
             {
-                if(raceruns[i].millis > (gamemillis - 5000)) intret(1);
+                if(raceruns[i].millis > ((unsigned long long)gamemillis - 5000)) intret(1);
                 else intret(0);
                 return;
             }
@@ -2479,17 +2479,17 @@ namespace server
         {
             if(!strcmp(raceruns[i].map, smapname))
             {
-                if(raceruns[i].millis > (gamemillis - 5000)) raceruns.remove(i);
+                if(raceruns[i].millis > ((unsigned long long)gamemillis - 5000)) raceruns.remove(i);
                 else return;
             }
         }
         racerun &cur = raceruns.add();
         copystring(cur.map, smapname);
         copystring(cur.name, runner);
-        cur.millis = (gamemillis - 5000);
+        cur.millis = ((unsigned long long)gamemillis - 5000);
     })
 
-    ICOMMAND(addbestracen, "ssi", (const char *runner, const char *map, int *millis), {
+    ICOMMAND(addbestracen, "ssi", (const char *runner, const char *map, unsigned long long int *millis), {
         racerun &cur = raceruns.add();
         copystring(cur.map, map);
         copystring(cur.name, runner);
@@ -2563,7 +2563,7 @@ namespace server
             execute("clearsleep");
             sendservmsg("\f0[RACE-BOT]\f7: Delivering the \f3map\f7...");
             loadmap();
-            sendservmsg("\f0[RACE-BOT]\f7: Waiting for all \f2clients \f7to get the map...");
+            sendservmsg("\f0[RACE-BOT]\f7: Waiting for \f1all \f2clients \f7to get the \f0map\f7...");
             execfile("racebot.cfg", false);
         }
         else execute("z = []; zz = []; zzz = []; zzzz = [];");
@@ -2831,7 +2831,7 @@ namespace server
             string bak;
             if(racemode && m_edit)
             {
-                sendservmsg("\f0[INFO]\f7: Changing to a \f3new \f7race...");
+                sendservmsg("\f0[INFO]\f7: Changing to a \f1new \f2race...");
                 defformatstring(mapname)("LITTLE-RACE-%i", curlr < 48 ? curlr+1 : 1);
                 curlr = curlr < 48 ? curlr+1 : 1;
                 changemap(mapname, 1);
@@ -4086,9 +4086,9 @@ namespace server
     })
 
     servcmd(info, PRIV_NONE, "", "displays information about the server mod and the server.", {
-        sendmsg(ci, "\fs\f0[INFO]\fr: running SM-Server Cube 2: Sauerbraten server modification.");
-        sendmsgf(ci, "\fs\f0[INFO]\fr: running on a%s %s machine.", 
-            sizeof(void*) == 8 ? " x86_64" : "n i686",
+        sendmsg(ci, "\fs\f0[INFO]\fr: Running \f6SM-Server \f4- \f1Cube \f02\f4: \f5Sauerbraten \f6game\f4-\f2server \f1modification\f7.");
+        sendmsgf(ci, "\fs\f0[INFO]\fr: Running on a\fs%s \f2%s \frmachine.", 
+            sizeof(void*) == 8 ? " \f0x86_64" : "n \f6i686",
 #ifdef _WIN32
                 "Windows"
 #else
@@ -4152,7 +4152,7 @@ namespace server
         defformatstring(hmsg)(" \fs\f0%i\fr hour%s,", Hours, Hours != 1 ? "s" : "");
         defformatstring(Mmsg)(" \fs\f0%i\fr minute%s and", Minutes, Minutes != 1 ? "s" : "");
         defformatstring(smsg)(" \fs\f0%i\fr second%s.", Seconds, Seconds != 1 ? "s" : "");
-        sendmsgf (ci, "\fs\f0[INFO]\fr: this server has been up for%s%s%s%s%s%s",
+        sendmsgf (ci, "\fs\f0[INFO]\fr: This \fs\f6server\fr has \fs\f2been \f0up \frfor%s%s%s%s%s%s",
             (totalsecs >= (60 * 60 * 24 * 30 * 12)) ? ymsg : "",
             (totalsecs >= (60 * 60 * 24 * 30)) ? mmsg : "",
             (totalsecs >= (60 * 60 * 24)) ? dmsg : "",
@@ -4193,8 +4193,8 @@ namespace server
                 }
                 else
                 {
-                    sendmsgf(cx, "\f0[PM]\f7: \f1%s \f7has sent you the \f0following \f6private \f2message\f7: \f1%s\f7.", colorname(ci), array[1]);
-                    sendmsgf(ci, "\f0[PM]\f7: \f1Your \f6private \f2message \f7has been \f0succsessfully \f7delivered to \f1%s\f7.", colorname(cx));
+                    sendmsgf(cx, "\f0[PM]\f7: \f1%s \f5(%i) \f7has sent you the \f0following \f6private \f2message\f7: \f1%s\f7.", cx->name, cx->clientnum, array[1]);
+                    sendmsgf(ci, "\f0[PM]\f7: \f1Your \f6private \f2message \f7has been \f0succsessfully \f7delivered to \f1%s \f5(%i)\f7.", ci->name, ci->clientnum);
                 }
             }
         }
@@ -5135,7 +5135,7 @@ namespace server
                 break;
         }
         sendservmsgf("\f0[MODULE]\f7: \f1%s \f7has \f0loaded \f7the \f6%s \f2module\f7.", colorname(ci), array[0]);
-    })
+    });
 
     servcmd(unload, PRIV_OWNER, "<module>", "unloads a module.", {
         char*array[2];
@@ -5154,7 +5154,7 @@ namespace server
                 break;
         }
         sendservmsgf("\f0[MODULE]\f7: \f1%s \f7has \f3unloaded \f7the \f6%s \f2module\f7.", colorname(ci), array[0]);
-    })
+    });
 
     servcmd(reload, PRIV_OWNER, "<module>", "reloads a module.", {
         char*array[2];
@@ -5177,6 +5177,13 @@ namespace server
     ICOMMAND(pban, "ss", (const char *ip, const char *reason), {
         addpban(ip, reason);
     });
+
+    ICOMMAND(dpban, "ss", (int *cn, const char *reason), {
+        clientinfo *cx = getinfo(*cn);
+        if(!cx) return;
+        addpban(getclienthostname(cx->clientnum), reason);
+        disconnect_client(cx->clientnum, DISC_IPBAN);
+    })
 
     ICOMMAND(pbanr24, "ss", (const char *range, const char *reason), {
         addrpban24(range, reason);
@@ -5214,7 +5221,7 @@ namespace server
         {
             fff->printf("// Automatically generated by SM-Server - do not exit.\n");
             fff->printf("// Contains a list of raceruns.\n");
-            loopv(raceruns) fff->printf("addbestracen %s %s %i\n", raceruns[i].name, raceruns[i].map, raceruns[i].millis);
+            loopv(raceruns) fff->printf("addbestracen %s %s %llu\n", raceruns[i].name, raceruns[i].map, raceruns[i].millis);
             delete fff;
         }
     }
@@ -5257,17 +5264,26 @@ namespace server
         if(ci->spectimes >= 2)
         {
             formatstring(command)("fspec 1 %i", ci->clientnum);
-            sendservmsgf("\f0[RACE-INFO]\f7: \f1%s \f5(%i) \f7has been spectated for the \f2entire race\f7 (\f3caught cheating \f13 \f3times\f7).", ci->name, ci->clientnum);
+            sendservmsgf("\f0[RACE-INFO]\f7: \f1%s \f5(%i) \f7has \f6been \f2spectated \f7for the \f1entire \f0race\f7 (\f3caught cheating \f13 \f3times\f7).", ci->name, ci->clientnum);
             execute(command);
         }
         else
         {
             if(ci->spectimes == 1) ci->islooser = true;
-            sendservmsgf("\f0[RACE-INFO]\f7: \f1%s \f5(%i) \f7has been spectated for \f15 \f7seconds (\f3caught cheating\f7).", ci->name, ci->clientnum);
+            sendservmsgf("\f0[RACE-INFO]\f7: \f1%s \f5(%i) \f7has \f6been \f2spectated for \f15 \f7seconds (\f3caught cheating\f7).", ci->name, ci->clientnum);
             formatstring(command)("c%i = [fspec 1 %i; sleep 5000 [fspec 0 %i]]; c%i", ci->clientnum, ci->clientnum, ci->clientnum, ci->clientnum);
             execute(command);
             ci->spectimes++;
         }
+    }
+
+    int getcountof(char *str, char chr)
+    {
+        int ret = 0;
+        for(int i = 0; str[i]; i++)
+            if(str[i] == chr)
+                ret++;
+        return ret;
     }
 
     void parsepacket(int sender, int chan, packetbuf &p)     // has to parse exactly each byte of the packet
@@ -5603,7 +5619,7 @@ namespace server
                 {
                     parsecommand(&text[1], cq);
                     return;
-                }
+                } else if(getcountof(text, '\n') >= 3) return;
                 filtertext(text, text);
                 if(cq->mute) return;
                 if(cq->isspy)
@@ -5733,6 +5749,7 @@ namespace server
             case N_REPLACE:
             case N_DELCUBE:
             {
+                if(racemode) { spec5sec(ci); return; }
                 int size = server::msgsizelookup(type);
                 if(size <= 0) { ac(ci, MESSAGESIZE, size); return; }
                 loopi(size - 1) getint(p);
@@ -5744,6 +5761,7 @@ namespace server
 
             case N_EDITENT:
             {
+                if(racemode) { spec5sec(ci); return; }
                 int i = getint(p);
                 loopk(3) getint(p);
                 int type = getint(p);
@@ -5769,6 +5787,7 @@ namespace server
 
             case N_EDITVAR:
             {
+                if(racemode) { spec5sec(ci); return; }
                 int type = getint(p);
                 getstring(text, p);
                 switch(type)
