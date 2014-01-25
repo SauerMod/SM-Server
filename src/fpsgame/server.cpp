@@ -1421,19 +1421,19 @@ namespace server
         sendpacket(cn, 1, p.finalize());
     }
 
-    void cleardemos(int n)
+    void cleardemos(int n, clientinfo *ci)
     {
         if(!n)
         {
             loopv(demos) delete[] demos[i].data;
             demos.shrink(0);
-            sendservmsg("cleared all demos");
+            sendservmsgf("\f0[INFO]\f7: \f1%s \f5(%i) \f7has \f0cleared \f5all \f2demos.", ci->name, ci->clientnum);
         }
         else if(demos.inrange(n-1))
         {
             delete[] demos[n-1].data;
             demos.remove(n-1);
-            sendservmsgf("cleared demo %d", n);
+            sendservmsgf("\f0[INFO]\f7: \f1%s \f5(%i) \f7has \f0cleared \f7the \f2demo \f5%d\f7.", ci->name, ci->clientnum, n);
         }
     }
 
@@ -5621,7 +5621,7 @@ namespace server
                     return;
                 } else if(getcountof(text, '\n') >= 3) return;
                 filtertext(text, text);
-                if(cq->mute) return;
+                if(cq->mute) { if(isdedicatedserver()) logoutf("%s <muted>: %s", colorname(cq), text); return; }
                 if(cq->isspy)
                 {
                     sendservmsgf("\f3{REMOTE} \f7%s\f1: %s", colorname(cq), text);
@@ -5834,7 +5834,7 @@ namespace server
                     }
                     else
                     {
-                        defformatstring(s)("mastermode %d is disabled on this server", mm);
+                        defformatstring(s)("\f0[INFO]\f7: We are \f0sorry\f7, but the mastermode \f2%d \f7is \f3disabled \f7on \f5this \f6server\f7.", mm);
                         sendf(sender, 1, "ris", N_SERVMSG, s);
                     }
                 }
@@ -5846,7 +5846,7 @@ namespace server
                 if(ci->privilege || ci->local)
                 {
                     bannedips.shrink(0);
-                    sendservmsgf("\f0[INFO]\f7: All \f3bans \f7have been \f0cleared \f7by \f1%s\f7.", colorname(ci));
+                    sendservmsgf("\f0[INFO]\f7: All \f3bans \f7have been \f0cleared \f7by \f1%s \f5(%i)\f7.", ci->name, ci->clientnum);
                 }
                 break;
             }
@@ -5916,11 +5916,11 @@ namespace server
                 if(ci->privilege < (restrictdemos ? PRIV_ADMIN : PRIV_MASTER) && !ci->local) break;
                 if(!maxdemos || !maxdemosize) 
                 {
-                    sendf(ci->clientnum, 1, "ris", N_SERVMSG, "the server has disabled demo recording");
+                    sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f0[INFO]\f7: We are \f0sorry\f7, but \f5this \f6server \f7has \f3disabled the \f2demo recording\f7.");
                     break;
                 }
                 demonextmatch = val!=0;
-                sendservmsgf("demo recording is %s for next match", demonextmatch ? "enabled" : "disabled");
+                sendservmsgf("\f0[INFO]\f7: The \f2demo recording \f7has been %s \f7for the \f5next \f6match\f7.", demonextmatch ? "\f0enabled" : "\f3disabled");
                 break;
             }
 
@@ -5935,7 +5935,7 @@ namespace server
             {
                 int demo = getint(p);
                 if(ci->privilege < (restrictdemos ? PRIV_ADMIN : PRIV_MASTER) && !ci->local) break;
-                cleardemos(demo);
+                cleardemos(demo, ci);
                 break;
             }
 
