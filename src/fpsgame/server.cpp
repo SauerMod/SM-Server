@@ -2684,6 +2684,7 @@ namespace server
         addlrend("LITTLE-RACE-49",  3064,  2462,  1570);
         addlrend("LITTLE-RACE-50",   480,   536,   230);
         addlrend("LITTLE-RACE-51",   289,   580,   558);
+        addlrend("LITTLE-RACE-52",    46,   942,   590);
     }) 
 
     ICOMMAND(lruninitialize, "", (), {
@@ -2837,8 +2838,8 @@ namespace server
             if(racemode && m_edit)
             {
                 sendservmsg("\f0[INFO]\f7: Changing to a \f1new \f2race...");
-                defformatstring(mapname)("LITTLE-RACE-%i", curlr < 51 ? curlr+1 : 1);
-                curlr = curlr < 51 ? curlr+1 : 1;
+                defformatstring(mapname)("LITTLE-RACE-%i", curlr < 52 ? curlr+1 : 1);
+                curlr = curlr < 52 ? curlr+1 : 1;
                 changemap(mapname, 1);
                 return;
             }
