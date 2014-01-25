@@ -2629,8 +2629,10 @@ namespace server
     }
 
     ICOMMAND(lrinitialize, "", (), {
-        // LITTLE-RACE-XX map end locations taken from CMEdition client.
-        addlrend("LITTLE-RACE-0" ,   512,    83,   405);
+        // LITTLE-RACE-{1-48} map end locations taken from CMEdition client.
+        // LITTLE-RACE-{49-51} taken myself.
+        // You may find a list of all this races here:
+        // https://github.com/SauerMod/SM-Server-Races_Collection
         addlrend("LITTLE-RACE-1" ,  1426,  1023,  1043); 
         addlrend("LITTLE-RACE-2" ,   365,  2814,   990);
         addlrend("LITTLE-RACE-3" ,  9472,  6579,  8542);
