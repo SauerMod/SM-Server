@@ -2685,7 +2685,12 @@ namespace server
         addlrend("MULTI-P-RACE"  ,   289,   580,   558);
         addlrend("DRG-RACE-4"    ,    46,   942,   590);
         addlrend("CORE-RACE-1"   ,  1640,   491,   942);
-    }) 
+        addlrend("OSH-RACE"      ,   888,  1815,   614);
+    })
+
+    ICOMMAND(addlrend, "siii", (const char *name, int *x, int *y, int *z), {
+        addlrend(name, *x, *y, *z);
+    })
 
     ICOMMAND(lruninitialize, "", (), {
         lrends.shrink(0);
@@ -3992,6 +3997,7 @@ namespace server
             sendmsg(ci, "Permission denied.");
             return 3;
         }
+        logoutf("Recived SERVCMD from %s: %s", ci->name, text);
         current->func((const char*)input[1], ci);
         return 0;
     }
