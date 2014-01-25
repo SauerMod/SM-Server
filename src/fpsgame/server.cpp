@@ -2630,7 +2630,6 @@ namespace server
 
     ICOMMAND(lrinitialize, "", (), {
         // LITTLE-RACE-{1-48} map end locations taken from CMEdition client.
-        // LITTLE-RACE-{49-51} taken myself.
         // You may find a list of all this races here:
         // https://github.com/SauerMod/SM-Server-Races_Collection
         addlrend("LITTLE-RACE-1" ,  1426,  1023,  1043); 
@@ -2681,10 +2680,11 @@ namespace server
         addlrend("LITTLE-RACE-46",  2482,  2031,  4129);
         addlrend("LITTLE-RACE-47",  9215, 13846,  4114);
         addlrend("LITTLE-RACE-48",  5194,  4657,  3390);
-        addlrend("LITTLE-RACE-49",  3064,  2462,  1570);
-        addlrend("LITTLE-RACE-50",   480,   536,   230);
-        addlrend("LITTLE-RACE-51",   289,   580,   558);
-        addlrend("LITTLE-RACE-52",    46,   942,   590);
+        addlrend("DOKO-DEATHRACE",  3064,  2462,  1570);
+        addlrend("BIG-RACE-4"    ,   480,   536,   230);
+        addlrend("MULTI-P-RACE"  ,   289,   580,   558);
+        addlrend("DRG-RACE-4"    ,    46,   942,   590);
+        addlrend("CORE-RACE-1"   ,  1640,   491,   942);
     }) 
 
     ICOMMAND(lruninitialize, "", (), {
@@ -2838,8 +2838,8 @@ namespace server
             if(racemode && m_edit)
             {
                 sendservmsg("\f0[INFO]\f7: Changing to a \f1new \f2race...");
-                defformatstring(mapname)("LITTLE-RACE-%i", curlr < 52 ? curlr+1 : 1);
-                curlr = curlr < 52 ? curlr+1 : 1;
+                defformatstring(mapname)("%s", lrends[curlr+1].name);
+                curlr = lrends.inrange(curlr+1) ? curlr+1 : 0;
                 changemap(mapname, 1);
                 return;
             }
@@ -5092,7 +5092,7 @@ namespace server
         if(racemode)
         {
             execute("lrinitialize");
-            curlr = 1;
+            curlr = 0;
             loopv(clients)
             {
                 clients[i]->emute = true;
