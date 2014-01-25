@@ -2679,6 +2679,9 @@ namespace server
         addlrend("LITTLE-RACE-46",  2482,  2031,  4129);
         addlrend("LITTLE-RACE-47",  9215, 13846,  4114);
         addlrend("LITTLE-RACE-48",  5194,  4657,  3390);
+        addlrend("LITTLE-RACE-49",  3064,  2462,  1570);
+        addlrend("LITTLE-RACE-50",   480,   536,   230);
+        addlrend("LITTLE-RACE-51",   289,   580,   558);
     }) 
 
     ICOMMAND(lruninitialize, "", (), {
@@ -2832,8 +2835,8 @@ namespace server
             if(racemode && m_edit)
             {
                 sendservmsg("\f0[INFO]\f7: Changing to a \f1new \f2race...");
-                defformatstring(mapname)("LITTLE-RACE-%i", curlr < 48 ? curlr+1 : 1);
-                curlr = curlr < 48 ? curlr+1 : 1;
+                defformatstring(mapname)("LITTLE-RACE-%i", curlr < 51 ? curlr+1 : 1);
+                curlr = curlr < 51 ? curlr+1 : 1;
                 changemap(mapname, 1);
                 return;
             }
@@ -4376,8 +4379,9 @@ namespace server
     {
         packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
         if(!ci) return;
-        defformatstring(msg)("\f1%s \f7%s %s%s%s",
-            colorname(ci),
+        defformatstring(msg)("\f0[INFO]\f7: Player \f1%s \f5(%i) \f7%s %s%s%s",
+            ci->name,
+            ci->clientnum,
             priv == PRIV_NONE ? "relinquished" : "claimed",
             hidepriv && (priv > PRIV_AUTH || (priv == PRIV_NONE && ci->privilege > PRIV_AUTH)) ? "\f4invisible " : "",
             priv == PRIV_NONE ? privcolor(ci->privilege) : privcolor(priv),
@@ -5085,7 +5089,7 @@ namespace server
         if(racemode)
         {
             execute("lrinitialize");
-            curlr = 0;
+            curlr = 1;
             loopv(clients)
             {
                 clients[i]->emute = true;
