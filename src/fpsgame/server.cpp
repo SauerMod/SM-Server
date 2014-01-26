@@ -2491,6 +2491,10 @@ namespace server
 
     ICOMMAND(addbestracen, "ssi", (const char *runner, const char *map, uint *millis), {
         racerun &cur = raceruns.add();
+        loopv(raceruns)
+        {
+            if(!strcmp(raceruns[i].map, map)) raceruns.remove(i);
+        }
         copystring(cur.map, map);
         copystring(cur.name, runner);
         cur.millis = *millis;
@@ -2629,7 +2633,7 @@ namespace server
     }
 
     ICOMMAND(lrinitialize, "", (), {
-        // LITTLE-RACE-{1-48} map end locations taken from CMEdition client.
+        // LITTLE-RACE-s map end locations taken from CMEdition client.
         // You may find a list of all this races here:
         // https://github.com/SauerMod/SM-Server-Races_Collection
         addlrend("LITTLE-RACE-1" ,  1426,  1023,  1043); 
@@ -2686,6 +2690,7 @@ namespace server
         addlrend("DRG-RACE-4"    ,    46,   942,   590);
         addlrend("CORE-RACE-1"   ,  1640,   491,   942);
         addlrend("OSH-RACE"      ,   888,  1815,   614);
+        addlrend("CORE-RACE-2"   ,  1816,  1611,  1902);
     })
 
     ICOMMAND(addlrend, "siii", (const char *name, int *x, int *y, int *z), {
@@ -3997,7 +4002,7 @@ namespace server
             sendmsg(ci, "Permission denied.");
             return 3;
         }
-        logoutf("Recived SERVCMD from %s: %s", ci->name, text);
+        logoutf("Recived SERVCMD from %s: %s %s", ci->name, input[0], input[1] ? : "");
         current->func((const char*)input[1], ci);
         return 0;
     }
@@ -5277,13 +5282,13 @@ namespace server
         if(ci->spectimes >= 2)
         {
             formatstring(command)("fspec 1 %i", ci->clientnum);
-            sendservmsgf("\f0[RACE-INFO]\f7: \f1%s \f5(%i) \f7has \f6been \f2spectated \f7for the \f1entire \f0race\f7 (\f3caught cheating \f13 \f3times\f7).", ci->name, ci->clientnum);
+            sendservmsgf("\f0[RACE-INFO]\f7: \f1%s \f5(%i) \f7has \f6been \f2spectated \f7for the \f1entire \f0race\f7 (\f3caught cheating \f13 \f3times \f4[editmode in \f5racemode\f4]\f7).", ci->name, ci->clientnum);
             execute(command);
         }
         else
         {
             if(ci->spectimes == 1) ci->islooser = true;
-            sendservmsgf("\f0[RACE-INFO]\f7: \f1%s \f5(%i) \f7has \f6been \f2spectated for \f15 \f7seconds (\f3caught cheating\f7).", ci->name, ci->clientnum);
+            sendservmsgf("\f0[RACE-INFO]\f7: \f1%s \f5(%i) \f7has \f6been \f2spectated for \f15 \f7seconds (\f3caught cheating \f4[editmode in \f5racemode\f4]\f7).", ci->name, ci->clientnum);
             formatstring(command)("c%i = [fspec 1 %i; sleep 5000 [fspec 0 %i]]; c%i", ci->clientnum, ci->clientnum, ci->clientnum, ci->clientnum);
             execute(command);
             ci->spectimes++;
