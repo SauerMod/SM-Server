@@ -2848,7 +2848,7 @@ namespace server
             if(racemode && m_edit)
             {
                 sendservmsg("\f0[INFO]\f7: Changing to a \f1new \f2race...");
-                defformatstring(mapname)("%s", lrends[curlr+1].name);
+                defformatstring(mapname)("%s", lrends[lrends.inrange(curlr+1)?curlr+1:0].name);
                 curlr = lrends.inrange(curlr+1) ? curlr+1 : 0;
                 changemap(mapname, 1);
                 return;
