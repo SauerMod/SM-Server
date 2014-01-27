@@ -10,6 +10,10 @@
 
 SauerMod-Server (A.K.A. SM-Server) - Cube 2: Sauerbraten Server Modiciation.
 
+Licensed under the GNU General Public License v3, see "LICENSE" and/or "GPL-3.txt".
+You can download the maps used by the RaceBot here:
+https://github.com/SauerMod/SM-Server-Races_Collection/archive/master.zip
+
 Current features:
 	+ Force spec on modified map
 	+ Man system
