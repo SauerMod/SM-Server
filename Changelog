@@ -1,5 +1,9 @@
 Changelog
 =========
+0.3.4:
+	* Racebot fixes.
+	* Added #disconnect.
+	* Warning fixes.
 0.3.3:
 	* Racebot changes.
 	* Added a lot of new races.

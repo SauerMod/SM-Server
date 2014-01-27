@@ -2520,6 +2520,18 @@ namespace server
         intret(1);
     })
 
+    ICOMMAND(hasoldbest, "", (), {
+        loopv(raceruns)
+        {
+            if(!strcmp((const char *)raceruns[i].map, smapname))
+            {
+                intret(1);
+                return;
+            }
+        }
+        intret(0);
+    })
+
     ICOMMAND(addbestrace, "s", (const char *runner), {
         loopv(raceruns)
         {
