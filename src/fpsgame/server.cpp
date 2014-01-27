@@ -1752,15 +1752,27 @@ namespace server
         bool needshide = true;
         if(val && authname) 
         {
-            if(authdesc && authdesc[0]) formatstring(msg)("\f0[INFO]\f7: Player \f1%s \f5(%i)\f7 claimed %s%s%s\f7 as \f5'\f2%s\f5' \f5{\f2%s\f5}",
-                ci->name,
-                ci->clientnum,
-                hidepriv ? "\f4invisible " : "",
-                privcolor(ci->privilege),
-                name,
-                authname,
-                authdesc
-            );
+            if(authdesc && authdesc[0])
+            {
+                formatstring(msg)("\f0[INFO]\f7: Player \f1%s \f5(%i)\f7 claimed %s%s%s\f7 as \f5'\f2%s\f5' \f5{\f2%s\f5}",
+                    ci->name,
+                    ci->clientnum,
+                    hidepriv ? "\f4invisible " : "",
+                    privcolor(ci->privilege),
+                    name,
+                    authname,
+                    authdesc
+                );
+                logoutf("[INFO]: Player %s (%i) claimed %s%s%s as '%s' {%s}",
+                    ci->name,
+                    ci->clientnum,
+                    hidepriv ? "invisible " : "",
+                    privcolor(ci->privilege),
+                    name,
+                    authname,
+                    authdesc
+                );
+            }
             else
             {
                 formatstring(msg)("\f0[INFO]\f7: Player \f1%s \f5(%i)\f7 claimed %s%s\f7 as \f5'\f2%s\f5'",
@@ -1770,18 +1782,35 @@ namespace server
                     name,
                     authname
                 );
+                logoutf("[INFO]: Player %s (%i) claimed %s%s as '%s'",
+                    ci->name,
+                    ci->clientnum,
+                    privcolor(ci->privilege),
+                    name,
+                    authname
+                );
                 needshide = false;
             }
         } 
-        else formatstring(msg)("\f0[INFO]\f7: Player \f1%s \f5(%i) \f7%s %s%s%s",
-            ci->name,
-            ci->clientnum,
-            val ? "claimed" : "relinquished",
-            ((val && ci->privilege > PRIV_AUTH) || oldpriv > PRIV_AUTH) && hidepriv ? "\f4invisible " : "",
-            privcolor(name),
-            name
-        );
-        logoutf(msg);
+        else
+        {
+            formatstring(msg)("\f0[INFO]\f7: Player \f1%s \f5(%i) \f7%s %s%s%s",
+                ci->name,
+                ci->clientnum,
+                val ? "claimed" : "relinquished",
+                ((val && ci->privilege > PRIV_AUTH) || oldpriv > PRIV_AUTH) && hidepriv ? "\f4invisible " : "",
+                privcolor(name),
+                name
+            );
+            logoutf("[INFO]: Player %s (%i) %s %s%s%s",
+                ci->name,
+                ci->clientnum,
+                val ? "claimed" : "relinquished",
+                ((val && ci->privilege > PRIV_AUTH) || oldpriv > PRIV_AUTH) && hidepriv ? "invisible " : "",
+                privcolor(name),
+                name
+            );
+        }
         packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
         if((hidepriv && needshide) || ci->isspy)
         {
@@ -1874,15 +1903,30 @@ namespace server
                 string msg;
                 if(!ci->isspy || !hidepriv || ci->privilege < PRIV_AUTH)
                 {
-                    if(reason && reason[0]) formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s \f5(%i) \f7has been \f3kicked \f7by \f0%s \f4because: \f0%s\f7.", vinfo->name, vinfo->clientnum, kicker, reason);
-                    else formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s \f5(%i) \f7has been \f3kicked \f7by %s\f7.", vinfo->name, vinfo->clientnum, kicker);
+                    if(reason && reason[0])
+                    {
+                        formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s \f5(%i) \f7has been \f3kicked \f7by \f0%s \f4because: \f0%s\f7.", vinfo->name, vinfo->clientnum, kicker, reason);
+                        logoutf("[INFO]: Player %s (%i) has been kicked by %s because: %s.", vinfo->name, vinfo->clientnum, kicker, reason);
+                    }
+                    else
+                    {
+                        formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s \f5(%i) \f7has been \f3kicked \f7by %s\f7.", vinfo->name, vinfo->clientnum, kicker);
+                        logoutf("[INFO]: Player %s (%i) has been kicked by %s.", vinfo->name, vinfo->clientnum, kicker);
+                    }
                 }
                 else
                 {
-                    if(reason && reason[0]) formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s \f5(%i) \f7has been \f3kicked \f4because: \f0%s\f7.", vinfo->name, vinfo->clientnum, reason);
-                    else formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s \f5(%i) \f7has been\f7.", vinfo->name, vinfo->clientnum);
-                }
-                logoutf(msg);
+                    if(reason && reason[0])
+                    {
+                        formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s \f5(%i) \f7has been \f3kicked \f4because: \f0%s\f7.", vinfo->name, vinfo->clientnum, reason);
+                        logoutf("[INFO]: Player %s (%i) has been kicked because: %s.", vinfo->name, vinfo->clientnum, reason);
+                    }
+                    else
+                    {
+                        formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s \f5(%i) \f7has been\f7.", vinfo->name, vinfo->clientnum);
+                        logoutf("[INFO]: Player %s (%i) has been.", vinfo->name, vinfo->clientnum);
+                    }
+            }
                 sendservmsg(msg);
                 uint ip = getclientip(victim);
                 addban(ip, 4*60*60000);
@@ -4751,6 +4795,18 @@ namespace server
         loopv(clients) if(clients[i]->privilege >= PRIV_ADMIN) sendmsgf(clients[i], "\f0[ADMINS-CHAT]\f7: \f1%s\f7: \f6%s", colorname(ci), args);
     })
 
+    servcmd(disconnect, PRIV_ADMIN, "<cn>", "Disconnects a client.", {
+        char *array[3];
+        explodeString(args, array, ' ', 2);
+        if(!array[0]) { sendmsg(ci, "usage: #disconnect <cn>"); return; }
+        int cn = atoi(array[0]);
+        clientinfo *cx = getinfo(cn);
+        if(!cx) { sendmsgf(ci, "Unknown client number: %i", cn); return; }
+        if(cx->privilege >= ci->privilege) { sendmsg(ci, "\f0[INFO]\f7: \f3Permission denied\f7."); return; }
+        sendservmsgf("\f0[INFO]\f7: Player \f1%s \f5(%i) \f7has disconnected client \f2%s \f5(%i)", ci->name, ci->clientnum, cx->name, cx->clientnum);
+        disconnect_client(cn, DISC_NONE);
+    })
+
     servcmd(ban, PRIV_ADMIN, "<cn> <time in minutes> [reason]", "kicks and bans a client with the specified ban duration.", {
         char *array[3];
         explodeString(args, array, ' ', 3);
@@ -4758,6 +4814,7 @@ namespace server
         int cn = atoi(array[0]);
         clientinfo *cx = getinfo(cn);
         if(!cx) { sendmsgf(ci, "Unknown client number: %i", cn); return; }
+        if(cx->privilege >= ci->privilege) { sendmsg(ci, "\f0[INFO]\f7: \f3Permission denied\f7."); return; }
         sendservmsgf("%s has banned %s for %i minutes%s%s",
             colorname(ci),
             colorname(cx),
@@ -4799,7 +4856,7 @@ namespace server
         if(!cx) sendmsgf(ci, "Unknown client number: %i", cn);
         else
         {
-            if(cx->privilege >= ci->privilege) { sendmsg(ci, "Permission denied."); return; }
+            if(cx->privilege >= ci->privilege) { sendmsg(ci, "\f0[INFO]\f7: \f3Permission denied\f7."); return; }
             addpban(getclienthostname(cx->clientnum), Array[1]?:"Unknown");
             sendservmsgf("\f0[INFO]\f7: \f1%s \f7has \f0added \f1%s \f5(\f2%s\f5) \f7to the list of \f3permamently \f2banned \f7clients for \f2%s\f7.", colorname(ci), colorname(cx), getclienthostname(cx->clientnum), Array[1] ? Array[1] : "an unknown reason");
             disconnect_client(cx->clientnum, DISC_IPBAN);
