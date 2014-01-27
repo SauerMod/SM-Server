@@ -50,7 +50,6 @@ Current features:
 	  -> Geolocation module         -> A un-/re-/loadable module to show client's geolocation on connect.
 
 Task list:
-	+ Add multiple master servers system.
 	+ Improve anticheat:
 	  -> Sound hack checks.
 	  -> Items in m_noitem checks.
@@ -58,7 +57,8 @@ Task list:
 	  -> Speed hack checks.
 	  -> Unknown message checks.
 
-Additional tasks:
+Additional (boring) tasks:
+	+ Add multiple master servers system.
 	+ IRC bot.
 	+ Improve scripting system.
 

@@ -1,5 +1,12 @@
 Changelog
 =========
+0.3.3:
+	* Racebot changes.
+	* Added a lot of new races.
+	* Now logging more stuff.
+	* Changed ac_pban_clients default to 0.
+	* Changed ac_public_message default to 1.
+	* Added "Logo.png".
 0.3.2:
 	* Bugfixed racebot.
 	* Fixed crash.

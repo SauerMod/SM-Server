@@ -981,8 +981,8 @@ namespace server
     };
 
     VAR(anticheat, 0, 1, 1);
-    VAR(ac_pban_clients, 0, 1, 1);
-    VAR(ac_public_message, 0, 0, 1);
+    VAR(ac_pban_clients, 0, 0, 1);
+    VAR(ac_public_message, 0, 1, 1);
     VAR(flagrun_min_millis, 0, 500, 1000);
 
     void ac(clientinfo * ci, cheat_id_t cheat_id, int eint = 0, const char *echar = "")
@@ -1781,6 +1781,7 @@ namespace server
             privcolor(name),
             name
         );
+        logoutf(msg);
         packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
         if((hidepriv && needshide) || ci->isspy)
         {
@@ -1881,6 +1882,7 @@ namespace server
                     if(reason && reason[0]) formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s \f5(%i) \f7has been \f3kicked \f4because: \f0%s\f7.", vinfo->name, vinfo->clientnum, reason);
                     else formatstring(msg)("\f0[INFO]\f7: \f2Player \f6%s \f5(%i) \f7has been\f7.", vinfo->name, vinfo->clientnum);
                 }
+                logoutf(msg);
                 sendservmsg(msg);
                 uint ip = getclientip(victim);
                 addban(ip, 4*60*60000);
@@ -2458,7 +2460,7 @@ namespace server
                 return;
             }
         }
-        result("");
+        result("Unknown");
     })
 
     ICOMMAND(isbestrace, "", (), {
@@ -4002,7 +4004,7 @@ namespace server
             sendmsg(ci, "Permission denied.");
             return 3;
         }
-        logoutf("Recived SERVCMD from %s: %s %s", ci->name, input[0], input[1] ? : "");
+        logoutf("Recived N_SERVCMD from %s (%i): %s %s", ci->name, ci->clientnum, input[0], input[1] ? : "");
         current->func((const char*)input[1], ci);
         return 0;
     }
