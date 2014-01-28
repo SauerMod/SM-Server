@@ -2511,6 +2511,10 @@ namespace server
     };
     vector<racerun> raceruns;
 
+    ICOMMAND(clearraces, "", (), {
+        raceruns.shrink(0);
+    })
+
     ICOMMAND(raceseconds, "", (), {
         floatret((float)(gamemillis-5000)/1000.0f);
     })
@@ -4831,7 +4835,7 @@ namespace server
                 for(int j = 0; j < 5 && clients_whois[i].names[j][0]; j++)
                 {
                     copystring(bak, msg);
-                    formatstring(msg)("%s%s \f2%s", bak, j != 0 ? "\f4," : "", clients_whois[i].names[j]);
+                    formatstring(msg)("%s%s \f2%s", bak, j != 0 ? "\f0," : "", clients_whois[i].names[j]);
                 }
                 sendmsg(ci, msg);
                 return;
