@@ -886,6 +886,9 @@ namespace server
     };
     vector<rpban> rpbans;
 
+    int explodeString(char *, char **, char, int);
+    int explodeString(const char *, char **, char, int);
+
     void addrpban24(const char *range, const char *reason)
     {
         loopv(rpbans) if(!strcmp(rpbans[i].Range, range)) return;
@@ -943,6 +946,35 @@ namespace server
                     _pban.hide = true;
                 }
             }
+        }
+    }
+
+    void addrpban(const char *range, const char *reason)
+    {
+        char *array[2];
+        explodeString(range, array, '/', 2);
+        if(!array[0] || !array[1]) return;
+        char *r[4];
+        explodeString(array[0], r, '.', 4);
+        int t = atoi(array[1]);
+        string _r;
+        switch(t)
+        {
+            case 8:
+                if(!r[0]) return;
+                formatstring(_r)("%s", r[0]);
+                addrpban8(_r, reason);
+                break;
+            case 16:
+                if(!r[0] || !r[1]) return;
+                formatstring(_r)("%s.%s", r[0], r[1]);
+                addrpban16(_r, reason);
+                break;
+            case 24:
+                if(!r[0] || !r[1] || !r[2]) return;
+                formatstring(_r)("%s.%s.%s", r[0], r[1], r[2]);
+                addrpban24(_r, reason);
+                break;
         }
     }
 
@@ -4875,7 +4907,14 @@ namespace server
         }
     })
 
-    servcmd(rpban24, PRIV_ADMIN, "<ip (e.g. 123.123.123)> [reason]", "permamently bans a /24 IP range.", {
+    servcmd(rpban, PRIV_ADMIN, "<range (e.g. 123.123.123.0/24 | 123.123.0.0/16 | 123.0.0.0/8)> [reason]", "permamently bans an IP range. (/24, /16 or /8)", {
+        char *array[2];
+        explodeString(args, array, ' ', 2);
+        if(!array[0]) { sendmsg(ci, "Usage: #rpban <range (e.g. 123.123.123.0/24 | 123.123.0.0/16 | 123.0.0.0/8)> [reason]"); return; }
+        addrpban(array[0], array[1]?:"Unknown");
+    })
+
+    /*servcmd(rpban24, PRIV_ADMIN, "<ip (e.g. 123.123.123)> [reason]", "permamently bans a /24 IP range.", {
         char * Array[2];
         explodeString(args, Array, ' ', 2);
         if(!Array[0]) { sendmsg(ci, "usage: #rpban24 <ip (e.g. 123.123.123)> [reason]"); return; }
@@ -4894,9 +4933,9 @@ namespace server
         explodeString(args, Array, ' ', 2);
         if(!Array[0]) { sendmsg(ci, "usage: #rpban8 <ip (e.g. 123)> [reason]"); return; }
         else addrpban8(Array[0], Array[1]?:"Unknown");
-    })
+    })*/
 
-    servcmd(unpban, PRIV_ADMIN, "<id>", "unbans a permamenlty banned client.", {
+    servcmd(unpban, PRIV_ADMIN, "<id>", "unbans a permamently banned client.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(!array[0]) { sendmsg(ci, "usage: #unpban <id>. You can find the ids of the pbanned clients with #listpbans."); return; }
@@ -4917,7 +4956,7 @@ namespace server
         string ip_range;
         int type = 0;
         loopv(rpbans) if(i==(j-x)) { type = rpbans[i].type; copystring(ip_range, (const char *)rpbans[i].Range); removed = true; rpbans.remove(i); }
-        switch(type)
+        if(removed) switch(type)
         {
             case 24:
                 for(int i = 0; i < 255; i++)
