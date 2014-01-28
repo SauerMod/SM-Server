@@ -4804,7 +4804,11 @@ namespace server
             {
                 char names[5][260];
                 copystring(names[0], name);
-                for(int j = 0; j < 4 && clients_whois[i].names[j][0]; j++) memcpy(names[j+1], clients_whois[i].names[j], MAXSTRLEN);
+                for(int j = 0; j < 4; j++)
+                {
+                    if(clients_whois[i].names[j][0]) memcpy(names[j+1], clients_whois[i].names[j], MAXSTRLEN);
+                    else copystring(names[j+1], "");
+                }
                 memcpy(clients_whois[i].names, names, sizeof(names));
             }
             return;
@@ -4813,6 +4817,10 @@ namespace server
         {
             cur = &clients_whois.add();
             copystring(cur->names[0], name);
+            copystring(cur->names[1], "");
+            copystring(cur->names[2], "");
+            copystring(cur->names[4], "");
+            copystring(cur->names[4], "");
             copystring(cur->addr, address);
         }
     }
