@@ -3864,7 +3864,7 @@ namespace server
             ci->emute = true;
         }
         if(ci->state.state==CS_SPECTATOR) sendf(-1, 1, "riii", N_SPECTATOR, ci->clientnum, 1);
-        add_client_whois(getclienthostname(ci->clientnum), ci->name);
+        if(ci->name[0]) add_client_whois(getclienthostname(ci->clientnum), ci->name);
     }
 
     VARP(Debug, 0, 1, 1); // enables debug features.
@@ -4307,8 +4307,8 @@ namespace server
                 }
                 else
                 {
-                    sendmsgf(cx, "\f0[PM]\f7: \f1%s \f5(%i) \f7has sent you the \f0following \f6private \f2message\f7: \f1%s\f7.", cx->name, cx->clientnum, array[1]);
-                    sendmsgf(ci, "\f0[PM]\f7: \f1Your \f6private \f2message \f7has been \f0succsessfully \f7delivered to \f1%s \f5(%i)\f7.", ci->name, ci->clientnum);
+                    sendmsgf(cx, "\f0[PM]\f7: \f1%s \f5(%i) \f7has sent you the \f0following \f6private \f2message\f7: \f1%s\f7.", ci->name, ci->clientnum, array[1]);
+                    sendmsgf(ci, "\f0[PM]\f7: \f1Your \f6private \f2message \f7has been \f0succsessfully \f7delivered to \f1%s \f5(%i)\f7.", cx->name, cx->clientnum);
                 }
             }
         }
@@ -4840,7 +4840,7 @@ namespace server
                 string msg;
                 formatstring(msg)("\f0[INFO]\f7: \f1%s \f5(%i)\f7's last 5 used names: ", cx->name, cx->clientnum);
                 string bak;
-                for(int j = 0; j < 5 && clients_whois[i].names[j][0]; j++)
+                for(int j = 0; clients_whois[i].names[j][0]; j++)
                 {
                     copystring(bak, msg);
                     formatstring(msg)("%s%s \f2%s", bak, j != 0 ? "\f0," : "", clients_whois[i].names[j]);
@@ -5917,7 +5917,7 @@ namespace server
                 if(!ci->name[0]) copystring(ci->name, "unnamed");
                 QUEUE_INT(N_SWITCHNAME);
                 QUEUE_STR(ci->name);
-                add_client_whois(getclienthostname(ci->clientnum), ci->name);
+                if(ci->name[0]) add_client_whois(getclienthostname(ci->clientnum), ci->name);
                 break;
             }
 
