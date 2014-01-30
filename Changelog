@@ -1,5 +1,11 @@
 Changelog
 =========
+1.0.0:
+	* Removed useless #rpban24, #rpban16 and #rpban8.
+	* Added #rpban, which parses ranges (x.x.x.0/24 | x.x.0.0/16 | x.0.0.0/8)
+	* Racebot changes and improvements.
+	* Added (unfinished) #whois.
+	* Fixed PM.
 0.3.4:
 	* Racebot fixes.
 	* Added #disconnect.

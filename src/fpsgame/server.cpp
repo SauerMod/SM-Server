@@ -2785,6 +2785,7 @@ namespace server
         addlrend("CORE-RACE-1"   ,  1640,   491,   942);
         addlrend("OSH-RACE"      ,   888,  1815,   614);
         addlrend("CORE-RACE-2"   ,  1816,  1611,  1902);
+        addlrend("Astoreth-Quest",  1920,  2868,  2190);
     })
 
     ICOMMAND(addlrend, "siii", (const char *name, int *x, int *y, int *z), {
