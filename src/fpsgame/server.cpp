@@ -2786,6 +2786,9 @@ namespace server
         addlrend("OSH-RACE"      ,   888,  1815,   614);
         addlrend("CORE-RACE-2"   ,  1816,  1611,  1902);
         addlrend("Astoreth-Quest",  1920,  2868,  2190);
+        addlrend("Xtrap-Race-1"  ,   133,   513,   354);
+        addlrend("Xtrap-Race-2"  ,  1089,  1570,  1058);
+        addlrend("Xtrap-Race-3"  ,  1256,  1215,  1954);
     })
 
     ICOMMAND(addlrend, "siii", (const char *name, int *x, int *y, int *z), {
@@ -5492,6 +5495,11 @@ namespace server
         string command;
         if(ci->spectimes >= 2)
         {
+            if(ci->spectimes > 2)
+            {
+                disconnect_client(ci->ownernum, DISC_MSGERR);
+                return;
+            }
             formatstring(command)("fspec 1 %i", ci->clientnum);
             sendservmsgf("\f0[RACE-INFO]\f7: \f1%s \f5(%i) \f7has \f6been \f2spectated \f7for the \f1entire \f0race\f7 (\f3caught cheating \f13 \f3times \f4[editmode in \f5racemode\f4]\f7).", ci->name, ci->clientnum);
             execute(command);
