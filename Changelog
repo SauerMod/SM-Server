@@ -1,5 +1,19 @@
 Changelog
 =========
+1.0.0t:
+	* Added #register.
+	* Added "Junk" commands [#beer, #slap, #hug, #makesex].
+	* Added #me.
+	* Added #mapsucks.
+	* Added #about.
+	* Added #time.
+	* Added #warning.
+	* Added #slay, #kill.
+	* Added #nodamage.
+	* Added #editbr, #deletebr.
+	* Fixed some bugs.
+	* Other small changes and improvements.
+
 1.0.0:
 	* Removed useless #rpban24, #rpban16 and #rpban8.
 	* Added #rpban, which parses ranges (x.x.x.0/24 | x.x.0.0/16 | x.0.0.0/8)
