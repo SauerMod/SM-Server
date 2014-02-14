@@ -3690,6 +3690,7 @@ namespace server
     {
         if(!m_edit || len > 8*1024*1024) return;
         clientinfo *ci = getinfo(sender);
+        if(autosendto && ci->emute) return;
         if(ci->state.state==CS_SPECTATOR && !ci->privilege && !ci->local) return;
         if(ci->emute) return;
         if(mapdata) DELETEP(mapdata);
@@ -5661,7 +5662,7 @@ namespace server
         }
     })
 
-    servcmd(deletebr, PRIV_ADMIN, "<mapname>", "Remove a race's best score.", {
+    servcmd(delbr, PRIV_ADMIN, "<mapname>", "Remove a race's best score.", {
         char*array[2];
         explodeString(args, array, ' ', 2);
         if(!array[0]) { sendmsg(ci, "Usage: #deletebr <mapname>."); return; }
@@ -6393,11 +6394,11 @@ namespace server
             case N_DELCUBE:
             {
                 if(racemode) { spec5sec(ci, SR_EDITMSG); return; }
+                if(ci->emute) return;
                 int size = server::msgsizelookup(type);
                 if(size <= 0) { ac(ci, MESSAGESIZE, size); return; }
                 loopi(size - 1) getint(p);
                 if(!m_edit) { ac(ci, EDITMSG); return; }
-                if(ci->emute) return;
                 if(cq && (ci != cq || ci->state.state!=CS_SPECTATOR)) { QUEUE_AI; QUEUE_MSG; }
                 break;
             }
@@ -6405,12 +6406,12 @@ namespace server
             case N_EDITENT:
             {
                 if(racemode) { spec5sec(ci, SR_EDITENT); return; }
+                if(ci->emute) return;
                 int i = getint(p);
                 loopk(3) getint(p);
                 int type = getint(p);
                 loopk(5) getint(p);
                 if(!m_edit) { ac(ci, EDITENT); return; }
-                if(ci->emute) return;
                 if(!ci || ci->state.state==CS_SPECTATOR) break;
                 QUEUE_MSG;
                 bool canspawn = canspawnitem(type);
@@ -6611,7 +6612,7 @@ namespace server
             case N_NEWMAP:
             {
                 int size = getint(p);
-                if(!ci->privilege && !ci->local && ci->state.state==CS_SPECTATOR) break;
+                if((!ci->privilege && !ci->local && ci->state.state==CS_SPECTATOR) || ci->emute) break;
                 if(size>=0)
                 {
                     smapname[0] = '\0';
@@ -6728,7 +6729,7 @@ namespace server
                 goto genericmsg;
 
             case N_PASTE:
-                if(ci->state.state!=CS_SPECTATOR) sendclipboard(ci);
+                if(ci->state.state!=CS_SPECTATOR && !ci->emute) sendclipboard(ci);
                 goto genericmsg;
     
             case N_CLIPBOARD:
