@@ -4603,8 +4603,8 @@ namespace server
         sendmsg(ci, "\fs\f0[ABOUT]\fr: Running \f6Titanium Mod \f4- \f1Cube \f02\f4: \f5Sauerbraten \f6game\f4-\f2server \f1modification\f7.");
         sendmsg(ci, "\fs\f0[ABOUT]\fr: \f6Titanium Mod \f7is a port of the \f6HS1 \f7commands \f2to \f6SM-Server\f7.");
         sendmsg(ci, "\fs\f0[ABOUT]\fr: \f0Developed by: \f2/dev/\f1core\f7.");
-        sendmsg(ci, "\fs\f0[ABOUT]\fr: \f0Special thanks\f7: \f2/dev/\f1Zen \f6(great ideas)\f1, \f2/dev/\f1cube \f6(style, ideas) \f1and \f2|SV|\f1Tiger.L \f6(ideas)\f1.");
-        sendmsg(ci, "\fs\f0[ABOUT]\fr: \f0Additional help: \f2/dev/\f1zero \f6(bugfixes, coding help)\f1, \f2/dev/\f1~dash \f6(style)\f1, \f2/dev/\f1nyne \f6(bug reports, ideas) \f1and \f2/dev/\f1ea \f6(bug reports, ideas)\f1.");
+        sendmsg(ci, "\fs\f0[ABOUT]\fr: \f0Special thanks\f7: \f2/dev/\f1Zen \f6(great ideas)\f1, \f2/dev/\f1cube \f6(style, ideas) \f1and \f2|>ES<|\f1Tiger.L \f6(ideas)\f1.");
+        sendmsg(ci, "\fs\f0[ABOUT]\fr: \f0Additional help: \f2/dev/\f1zero \f6(bugfixes, coding help)\f1, \f2/dev/\f1~dash \f6(style)\f1, \f2/dev/\f1nyne \f6(bug reports, ideas)\f1, \f2|>ES<|\f1Backy \f6(OS X binaries, ideas, others) \f1and \f2/dev/\f1ea \f6(bug reports, ideas)\f1.");
     })
 
     servcmd(hug, PRIV_NONE, "<cn>", "Hug your friends!", {
