@@ -4328,7 +4328,7 @@ namespace server
         defformatstring(hmsg)(" \fs\f0%i\fr hour%s,", Hours, Hours != 1 ? "s" : "");
         defformatstring(Mmsg)(" \fs\f0%i\fr minute%s and", Minutes, Minutes != 1 ? "s" : "");
         defformatstring(smsg)(" \fs\f0%i\fr second%s.", Seconds, Seconds != 1 ? "s" : "");
-        sendmsgf (ci, "\fs\f0[INFO]\fr: This \fs\f6server\fr has \fs\f2been \f0up \frfor%s%s%s%s%s%s",
+        sendmsgf(ci, "\fs\f0[INFO]\fr: This \fs\f6server\fr has \fs\f2been \f0up \frfor%s%s%s%s%s%s",
             (totalsecs >= (60 * 60 * 24 * 30 * 12)) ? ymsg : "",
             (totalsecs >= (60 * 60 * 24 * 30)) ? mmsg : "",
             (totalsecs >= (60 * 60 * 24)) ? dmsg : "",
@@ -4336,6 +4336,7 @@ namespace server
             (totalsecs >= (60)) ? Mmsg : "",
             (totalsecs >= (1)) ? smsg : ""
         );
+        sendmsg(ci, "\fs\f0[INFO]\fr: Try \f5#\f0about \f7for more \f2help \f7about this \f6server modification\f7.");
     })
 
     servcmd(flagrun, PRIV_NONE, "", "displays the best flagrun on the current map and mode.", {
@@ -4601,7 +4602,8 @@ namespace server
         sendmsg(ci, "\fs\f0[ABOUT]\fr: Running \f6Titanium Mod \f4- \f1Cube \f02\f4: \f5Sauerbraten \f6game\f4-\f2server \f1modification\f7.");
         sendmsg(ci, "\fs\f0[ABOUT]\fr: \f6Titanium Mod \f7is a port of the \f6HS1 \f7commands \f2to \f6SM-Server\f7.");
         sendmsg(ci, "\fs\f0[ABOUT]\fr: \f0Developed by: \f2/dev/\f1core\f7.");
-        sendmsg(ci, "\fs\f0[ABOUT]\fr: \f0Special thanks: \f2/dev/\f1zero \f6(bugfixes, coding help)\f1, \f2/dev/\f1cube \f6(style)\f1, \f2/dev/\f1~dash \f6(style)\f1, \f2/dev/\f1nyne \f6(bug reports, ideas)\f1, \f2/dev/\f1ea \f6(bug reports, ideas) \f1and \f2|SV|\f1Tiger.L \f6(ideas)\f1.");
+        sendmsg(ci, "\fs\f0[ABOUT]\fr: \f0Special thanks\f7: \f2/dev/\f1Zen \f6(great ideas)\f1, \f2/dev/\f1cube \f6(style, ideas) \f1and \f2|SV|\f1Tiger.L \f6(ideas)\f1.");
+        sendmsg(ci, "\fs\f0[ABOUT]\fr: \f0Additional help: \f2/dev/\f1zero \f6(bugfixes, coding help)\f1, \f2/dev/\f1~dash \f6(style)\f1, \f2/dev/\f1nyne \f6(bug reports, ideas) \f1and \f2/dev/\f1ea \f6(bug reports, ideas)\f1.");
     })
 
     servcmd(hug, PRIV_NONE, "<cn>", "Hug your friends!", {
@@ -5181,6 +5183,26 @@ namespace server
 
     servcmd(kill, PRIV_AUTH, "<cn[,cn2[,...]]>", "Suicide (a) client(s)", {
         slay(ci, args, "kill");
+    })
+
+    void pausefunction(clientinfo *ci)
+    {
+        if(gamepaused)
+        {
+            sendservmsgf("\f0[INFO]\f7: \f2Client \f1%s \f5(%i) \f7has resumed the \f6game\f7.", ci->name, ci->clientnum);
+            pausegame(false, ci);
+            return;
+        }
+        sendservmsgf("\f0[INFO]\f7: \f2Client \f1%s \f5(%i) \f7has paused the \f6game\f7.", ci->name, ci->clientnum);
+        pausegame(true, ci);
+    }
+
+    servcmd(pause, PRIV_ADMIN, "", "Pause the game", {
+        pausefunction(ci);
+    })
+
+    servcmd(resume, PRIV_ADMIN, "", "Resume the game", {
+        pausefunction(ci);
     })
 
     servcmd(hidepriv, PRIV_ADMIN, "[0/1]", "toggles privilege hiding.", {
