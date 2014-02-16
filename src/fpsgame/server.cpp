@@ -4627,6 +4627,21 @@ namespace server
         sendservmsgf("\f0[INFO]\f7: \f2Client \f1%s \f5(%i) \f7slaps \f2%s \f7very \f3hard\f7.", ci->name, ci->clientnum, colorname(cx));
     })
 
+    servcmd(viewbr, PRIV_NONE, "", "Display all raceruns", {
+        bool found = false;
+        loopv(raceruns)
+        {
+            sendmsgf(ci, "\f0[INFO]\f7: \f6Racerun \f7from \f1%s \f7on map \f2%s \f7- time: \f0%.3f \f6seconds \f4[ID: \f0%i\f4]\f7.",
+                raceruns[i].name,
+                raceruns[i].map,
+                (float)raceruns[i].millis / 1000.0f,
+                i
+            );
+            if(!found) found = true;
+        }
+        if(!found) { sendmsg(ci, "At the moment there are no raceruns."); }
+    })
+
     void changetime(int millis)
     {
         if(!m_timed || !smapname[0]) return;
@@ -5007,7 +5022,7 @@ namespace server
         bool geolocation_is_enabled = false;
         int i = is_mod_loaded("geolocation");
         typedef const char * (* getclientlocationtype)(const char *);
-        getclientlocationtype getclientlocation;
+        getclientlocationtype getclientlocation = NULL;
         if(i >= 0)
         {
             getclientlocation = (getclientlocationtype)getexternal((char*)"geolocation_client_location");
@@ -5877,6 +5892,36 @@ namespace server
         }
     })
 
+    ICOMMAND(spec_all, "", (), {
+        loopv(clients)
+        {
+            clientinfo *cx = clients[i];
+            if(!cx) continue;
+            cx->forcespec = true;
+            if(cx->state.state==CS_ALIVE) suicide(cx);
+            if(smode) smode->leavegame(cx);
+            cx->state.state = CS_SPECTATOR;
+            cx->state.timeplayed += lastmillis - cx->state.lasttimeplayed;
+            if(!cx->local && !cx->privilege) aiman::removeai(cx);
+            sendf(-1, 1, "ri3", N_SPECTATOR, cx->ownernum, 1);
+        }
+    })
+
+    ICOMMAND(unspec_all, "", (), {
+        loopv(clients)
+        {
+            clientinfo *cx = clients[i];
+            if(!cx) continue;
+            cx->forcespec = false;
+            cx->state.state = CS_DEAD;
+            cx->state.respawn();
+            cx->state.lasttimeplayed = lastmillis;
+            aiman::addclient(cx);
+            if(cx->clientmap[0] || cx->mapcrc) checkmaps();
+            sendf(-1, 1, "ri3", N_SPECTATOR, cx->ownernum, 0);  
+        }
+    })
+
     enum specreason_t
     {
         SR_EDITTOGGLE = 0,
@@ -5903,7 +5948,7 @@ namespace server
         string command;
         if(ci->spectimes >= 2)
         {
-            formatstring(command)("fspec 1 %i", ci->clientnum);
+            formatstring(command)("fspec 1 %i; c%iu = []", ci->clientnum, ci->clientnum);
             sendservmsgf("\f0[RACE-INFO]\f7: \f1%s \f5(%i) \f7has \f6been \f2spectated \f7for the \f1entire \f0race\f7 (\f3caught cheating \f13 \f3times \f4[%s in \f5racemode\f4]\f7).", ci->name, ci->clientnum, specreason_n(specreason));
             execute(command);
         }
@@ -5911,7 +5956,7 @@ namespace server
         {
             if(ci->spectimes == 1) ci->islooser = true;
             sendservmsgf("\f0[RACE-INFO]\f7: \f1%s \f5(%i) \f7has \f6been \f2spectated for \f15 \f7seconds (\f3caught cheating \f4[%s in \f5racemode\f4]\f7).", ci->name, ci->clientnum, specreason_n(specreason));
-            formatstring(command)("c%i = [fspec 1 %i; sleep 5000 [fspec 0 %i]]; c%i", ci->clientnum, ci->clientnum, ci->clientnum, ci->clientnum);
+            formatstring(command)("c%i = [fspec 1 %i; sleep 5000 [c%iu]]; c%iu = [fspec 0 %i]; c%i", ci->clientnum, ci->clientnum, ci->clientnum, ci->clientnum, ci->clientnum, ci->clientnum);
             execute(command);
             ci->spectimes++;
         }
