@@ -643,7 +643,7 @@ void serverslice(bool dedicated, uint timeout)   // main server update, called f
         lastmillis += curtime;
         totalmillis = millis;
         updatetime();
-        checksleep(totalmillis);
+        checksleep(lastmillis);
     }
     server::serverupdate();
 
