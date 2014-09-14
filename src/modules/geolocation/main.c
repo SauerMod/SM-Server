@@ -30,16 +30,16 @@ const char * getclientlocation(const char *addr)
 		{
 			city = _gire_ci_->city;
 			snprintf(message, sizeof(message), "\fs\f1City\f7: \f6%s\fr\fs, \f5Country\fr\fs: \f2%s\fr.",
-				city,
-				country
+				city ?: "Unknown",
+				country ?: "Unknown"
 			);
 		}
 		else snprintf(message, sizeof(message), "\fs\f5Country\fr\fs: \f2%s\fr.",
-			country
+			country ?: "Unknown"
 		);
 	}
 	else snprintf(message, sizeof(message), "\fs\f5Country\fr\fs: \f2%s\fr.",
-		country
+		country ?: "Unknown"
 	);
 	const char *out = (const char*)message;
 	return out;
@@ -62,18 +62,18 @@ void mod_func(char *args[16])
 			city = _gire_ci_->city;
 			snprintf(message, sizeof(message), "\f0[INFO]\f7: Client \fs\f1%s\fr has connected from \fs\f6%s\fr, \fs\f2%s\fr.",
 				clientname,
-				city,
-				country
+				city ?: "Unknown",
+				country ?: "Unknown"
 			);
 		}
 		else snprintf(message, sizeof(message), "\f0[INFO]\f7: Client \fs\f1%s\fr has connected from \fs\f2%s\fr.",
 			clientname,
-			country
+			country ?: "Unknown"
 		);
 	}
 	else snprintf(message, sizeof(message), "\f0[INFO]\f7: Client \fs\f1%s\fr has connected from \fs\f2%s\fr.",
 		clientname,
-		country
+		country ?: "Unknown"
 	);
 	sendservmsgf(message);
 }
